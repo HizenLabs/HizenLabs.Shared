@@ -1,0 +1,28 @@
+<Project>
+
+  <!-- Local-only overrides (e.g. RustManagedDir). Never committed. -->
+  <Import Project="$(MSBuildThisFileDirectory)Directory.Build.User.props"
+          Condition="Exists('$(MSBuildThisFileDirectory)Directory.Build.User.props')" />
+
+  <PropertyGroup>
+    <!-- Rust Dedicated Server managed assemblies. Populated by scripts/fetch-references.sh
+         (SteamCMD, app 258550) into a git-ignored ./managed, or overridden in
+         Directory.Build.User.props to point at an existing server install. -->
+    <RustManagedDir Condition="'$(RustManagedDir)' == ''">$(MSBuildThisFileDirectory)managed</RustManagedDir>
+
+    <LangVersion>11</LangVersion>
+    <Deterministic>true</Deterministic>
+    <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
+  </PropertyGroup>
+
+  <!-- Rust game assemblies for net48 projects that opt in via ReferenceRustAssemblies.
+       Excludes BCL dupes shipped in Unity's Managed folder (resolved from the net48
+       targeting pack instead) and Carbon.* (provided by the Carbon.Community NuGet). -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'net48' AND '$(ReferenceRustAssemblies)' == 'true'">
+    <Reference Include="$(RustManagedDir)/*.dll"
+               Exclude="$(RustManagedDir)/System*.dll;$(RustManagedDir)/mscorlib.dll;$(RustManagedDir)/netstandard.dll;$(RustManagedDir)/Mono.*.dll;$(RustManagedDir)/Microsoft.CSharp.dll;$(RustManagedDir)/I18N*.dll;$(RustManagedDir)/Carbon*.dll">
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+</Project>

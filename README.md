@@ -1,0 +1,51 @@
+# HizenLabs.Shared
+
+The shared runtime library and build SDK behind HizenLabs plugins.
+
+Rust plugins have to ship as a single `.cs` file, which usually means copying the
+same boilerplate (localization, config, UI, pooling) into every plugin. This repo
+removes that: you write a normal multi-project solution against a shared library,
+and the SDK turns it into the single-file plugins the server expects.
+
+## What's here
+
+| Project | Target | Role |
+|---|---|---|
+| `HizenLabs.Shared` | net48 | Runtime library — localization, logging, pooling, serialization, UI |
+| `HizenLabs.CodeGen` | netstandard2.0 | Roslyn source generators for declarative config, localization, and UI |
+| `HizenLabs.Bundler` | net8.0 | Merges a plugin + the shared code it uses into one self-contained `.cs` |
+
+The generators give you ordinary, IDE-friendly C# (full IntelliSense, navigation,
+tests). The bundler inlines only the shared code a plugin actually references, so
+each output stays lean.
+
+## Building
+
+```bash
+# One-time: fetch the Rust game assemblies (requires SteamCMD)
+scripts/fetch-references.sh
+# ...or point RustManagedDir at an existing server's Managed folder in Directory.Build.User.props
+
+dotnet build HizenLabs.Shared.slnx
+```
+
+Carbon assemblies come from the [`Carbon.Community`](https://www.nuget.org/packages/Carbon.Community)
+NuGet package. The Rust game DLLs are never committed — they're fetched locally into
+a git-ignored `managed/`.
+
+## License & contributing
+
+HizenLabs.Shared is © 2026 Aerial Byte LLC (operating the HizenLabs brand) and is
+**dual-licensed**:
+
+- **[GPLv3](LICENSE)** for open-source use — use it freely in your own GPL-licensed
+  plugins.
+- **Commercial license** for proprietary/closed plugins. Want to ship
+  HizenLabs.Shared in a paid or closed-source plugin? Reach out via
+  [hizen.dev](https://hizen.dev).
+
+Contributions are welcome and require our [CLA](CLA.md) — see
+[CONTRIBUTING.md](CONTRIBUTING.md). The CLA is what keeps the dual-licensing
+(and therefore the premium line) possible.
+
+Part of the [HizenLabs](https://github.com/HizenLabs) org.

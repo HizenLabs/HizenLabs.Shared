@@ -1,0 +1,29 @@
+# Build output
+bin/
+obj/
+[Dd]ebug/
+[Rr]elease/
+artifacts/
+dist/
+
+# IDE
+.vs/
+.vscode/
+*.user
+*.suo
+
+# NuGet
+*.nupkg
+*.snupkg
+.packages/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local-only overrides
+Directory.Build.User.props
+
+# Rust managed reference assemblies (fetch-references.sh)
+managed/
+.rds/

@@ -31,4 +31,19 @@
     </Reference>
   </ItemGroup>
 
+  <!-- Deploy: copy the selected plugin(s) into the active target server's plugins folder,
+       which the running container hot-loads. The target server is whichever
+       Configuration|Platform you built (Release|Carbon -> rust-carbon-release). Opt-in per
+       developer via a git-ignored Deploy.local.props at the plugin repo root (see
+       Deploy.local.props.example). Version stamping is intentionally NOT done here - that
+       happens in the release workflow. -->
+  <Target Name="DeployPlugins" AfterTargets="Build" Condition="'$(DeployEnabled)' == 'true' AND '@(DeployPlugin)' != ''">
+    <PropertyGroup>
+      <_PluginsDir>$([MSBuild]::NormalizeDirectory('$(RustManagedDir)', '..', 'plugins'))</_PluginsDir>
+    </PropertyGroup>
+    <MakeDir Directories="$(_PluginsDir)" />
+    <Copy SourceFiles="@(DeployPlugin)" DestinationFolder="$(_PluginsDir)" SkipUnchangedFiles="true" />
+    <Message Importance="high" Text="[deploy] @(DeployPlugin->'%(Filename)%(Extension)', ', ') -> $(_PluginsDir)" />
+  </Target>
+
 </Project>

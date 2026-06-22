@@ -1,0 +1,21 @@
+# Local secrets / overrides
+.env
+
+# Compiled plugin artifacts
+*.dll
+plugins/*.cs.error
+servers/*/plugins/*.cs.error
+
+# Per-server runtime mounts under ./servers/<container>/ :
+#   - config/ and logs/ are reseeded/cleared on every boot (ephemeral)
+#   - plugins/ holds deploy-script outputs
+# Keep the plugins folder marker, ignore everything else.
+servers/*/config/*
+servers/*/logs/*
+servers/*/plugins/*
+!servers/*/plugins/.gitkeep
+
+# Managed assemblies exported by the entrypoint (copyrighted game/mod DLLs).
+servers/*/refs/
+
+# Game installs are baked into the Docker images, not on disk here.

@@ -21,12 +21,14 @@ each output stays lean.
 
 ## Building
 
-```powershell
-# One-time: fetch the Rust game assemblies (downloads SteamCMD + the dedicated server)
-.\scripts\fetch-references.ps1
-# ...or set RustManagedDir to an existing server's Managed folder in Directory.Build.User.props
+The game and framework assemblies come from the test-env: start it once and each
+server exports its managed set to `test-env/docker/servers/<name>/refs`.
 
-dotnet build HizenLabs.Shared.slnx
+```powershell
+.\test-env\start.ps1   # boots the docker matrix; exports refs on container start
+
+# Build a target: Configuration {Release|Staging} x Platform {Carbon|Oxide}
+dotnet build HizenLabs.Shared.slnx -p:Configuration=Release -p:Platform=Carbon
 ```
 
 Carbon assemblies come from the [`Carbon.Community`](https://www.nuget.org/packages/Carbon.Community)

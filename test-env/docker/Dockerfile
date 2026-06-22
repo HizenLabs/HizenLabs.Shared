@@ -79,7 +79,8 @@ ENV BAKED_MOD=${MOD} \
 
 # Install game + mod + (staging overlay) + pre-generated map + seed snapshot.
 COPY --chown=linuxgsm:linuxgsm build-install.sh /home/linuxgsm/build-install.sh
-RUN chmod +x /home/linuxgsm/build-install.sh \
+RUN sed -i 's/\r$//' /home/linuxgsm/build-install.sh \
+    && chmod +x /home/linuxgsm/build-install.sh \
     && MOD="${MOD}" RUST_BRANCH="${RUST_BRANCH}" \
        OXIDE_STAGING_URL="${OXIDE_STAGING_URL}" \
        SEED="${SEED}" WORLD_SIZE="${WORLD_SIZE}" SERVER_LEVEL="${SERVER_LEVEL}" \
@@ -87,7 +88,8 @@ RUN chmod +x /home/linuxgsm/build-install.sh \
        /home/linuxgsm/build-install.sh
 
 COPY --chown=linuxgsm:linuxgsm entrypoint.sh /home/linuxgsm/entrypoint.sh
-RUN chmod +x /home/linuxgsm/entrypoint.sh
+RUN sed -i 's/\r$//' /home/linuxgsm/entrypoint.sh \
+    && chmod +x /home/linuxgsm/entrypoint.sh
 
 # game(udp) / query(udp) / rcon(tcp) / Rust+ app(tcp). Published with per-
 # instance offsets in docker-compose.yml.

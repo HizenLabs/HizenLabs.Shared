@@ -3,6 +3,9 @@
   <PropertyGroup>
     <!-- Roslyn requires source generators to target netstandard2.0. -->
     <TargetFramework>netstandard2.0</TargetFramework>
+    <!-- Platform-agnostic, but mirror the solution matrix so all projects share configs. -->
+    <Configurations>Release;Staging</Configurations>
+    <Platforms>Carbon;Oxide</Platforms>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <IncludeBuildOutput>false</IncludeBuildOutput>

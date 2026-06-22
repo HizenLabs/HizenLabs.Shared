@@ -1,6 +1,6 @@
 # Contributing to HizenLabs.Shared
 
-Contributions are welcome — bug fixes, new shared utilities, generator/bundler
+Contributions are welcome: bug fixes, new shared utilities, generator/bundler
 improvements.
 
 ## One thing to know first: the CLA
@@ -9,8 +9,8 @@ improvements.
 and is **dual-licensed** (GPLv3 publicly, plus commercial terms so it can be used in
 the proprietary HizenLabs Premium plugins). To keep that possible, every contributor
 must agree to our [Contributor License Agreement](https://gist.github.com/EthanDelong/7e7e19ea155c4dfc6d0317747629c1ed)
-before a change can be merged. It lets you keep your copyright while granting Aerial Byte LLC the right to
-relicense your contribution.
+before a change can be merged. It lets you keep your copyright while granting Aerial
+Byte LLC the right to relicense your contribution.
 
 Opening a pull request confirms you agree to the CLA.
 

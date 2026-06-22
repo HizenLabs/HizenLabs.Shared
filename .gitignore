@@ -27,3 +27,4 @@ Directory.Build.User.props
 # Rust managed reference assemblies (fetch-references.sh)
 managed/
 .rds/
+.tools/

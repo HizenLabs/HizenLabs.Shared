@@ -1,4 +1,4 @@
-// HizenLabs.Bundler CLI — merge a plugin + the shared code it uses into one .cs.
+// HizenLabs.Bundler CLI - merge a plugin + the shared code it uses into one .cs.
 //
 //   hizenbundle --plugin <file> --shared-dir <dir> --namespace <ns> [--out <file>]
 using HizenLabs.Bundler;
@@ -22,7 +22,7 @@ else
 Console.Error.WriteLine($"[bundler] inlined {result.InlinedTypes.Count} shared type(s): {string.Join(", ", result.InlinedTypes)}");
 if (result.Compiles)
 {
-    Console.Error.WriteLine("[bundler] output compiles ✓");
+    Console.Error.WriteLine("[bundler] output compiles OK");
     return 0;
 }
 

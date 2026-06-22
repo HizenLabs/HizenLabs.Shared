@@ -5,7 +5,7 @@
           Condition="Exists('$(MSBuildThisFileDirectory)Directory.Build.User.props')" />
 
   <PropertyGroup>
-    <!-- Rust Dedicated Server managed assemblies. Populated by scripts/fetch-references.sh
+    <!-- Rust Dedicated Server managed assemblies. Populated by scripts/fetch-references.ps1
          (SteamCMD, app 258550) into a git-ignored ./managed, or overridden in
          Directory.Build.User.props to point at an existing server install. -->
     <RustManagedDir Condition="'$(RustManagedDir)' == ''">$(MSBuildThisFileDirectory)managed</RustManagedDir>

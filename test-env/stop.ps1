@@ -5,18 +5,18 @@
 #   .\stop.ps1                            # all mods, all branches (default)
 #   .\stop.ps1 -Mod Carbon -Branch Staging
 #
-# -Branch: All (default) | Staging | Prod      (Prod = release game branch)
+# -Branch: All (default) | Staging | Release      (Release = release game branch)
 # -Mod:    All (default) | Oxide   | Carbon
 # =============================================================================
 [CmdletBinding()]
 param(
-    [ValidateSet('All','Staging','Prod')][string]$Branch = 'All',
+    [ValidateSet('All','Staging','Release')][string]$Branch = 'All',
     [ValidateSet('All','Oxide','Carbon')][string]$Mod = 'All'
 )
 
 $branches = switch ($Branch) {
     'All'     { @('release','staging') }
-    'Prod'    { @('release') }
+    'Release'    { @('release') }
     'Staging' { @('staging') }
 }
 $mods = switch ($Mod) {

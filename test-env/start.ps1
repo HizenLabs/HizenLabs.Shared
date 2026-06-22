@@ -3,10 +3,10 @@
 #
 #   .\start.ps1                            # all mods, all branches (default)
 #   .\start.ps1 -Mod Carbon                # carbon, both branches
-#   .\start.ps1 -Branch Prod               # both mods, release only
+#   .\start.ps1 -Branch Release               # both mods, release only
 #   .\start.ps1 -Mod Oxide -Branch Staging # oxide-staging only
 #
-# -Branch: All (default) | Staging | Prod      (Prod = release game branch)
+# -Branch: All (default) | Staging | Release      (Release = release game branch)
 # -Mod:    All (default) | Oxide   | Carbon
 #
 # Connect from the Rust client F1 console:  client.connect 127.0.0.1:<game-port>
@@ -14,13 +14,13 @@
 # =============================================================================
 [CmdletBinding()]
 param(
-    [ValidateSet('All','Staging','Prod')][string]$Branch = 'All',
+    [ValidateSet('All','Staging','Release')][string]$Branch = 'All',
     [ValidateSet('All','Oxide','Carbon')][string]$Mod = 'All'
 )
 
 $branches = switch ($Branch) {
     'All'     { @('release','staging') }
-    'Prod'    { @('release') }
+    'Release'    { @('release') }
     'Staging' { @('staging') }
 }
 $mods = switch ($Mod) {

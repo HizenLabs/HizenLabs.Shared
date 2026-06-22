@@ -11,20 +11,20 @@
 #   .\rebuild.ps1 -Mod Carbon -Branch Staging
 #   .\rebuild.ps1 -NoCache                   # nuke ALL cache incl. OS/base layers
 #
-# -Branch: All (default) | Staging | Prod      (Prod = release game branch)
+# -Branch: All (default) | Staging | Release      (Release = release game branch)
 # -Mod:    All (default) | Oxide   | Carbon
 # -NoCache: full no-cache rebuild from the FROM line down (slowest, rarely needed)
 # =============================================================================
 [CmdletBinding()]
 param(
-    [ValidateSet('All','Staging','Prod')][string]$Branch = 'All',
+    [ValidateSet('All','Staging','Release')][string]$Branch = 'All',
     [ValidateSet('All','Oxide','Carbon')][string]$Mod = 'All',
     [switch]$NoCache
 )
 
 $branches = switch ($Branch) {
     'All'     { @('release','staging') }
-    'Prod'    { @('release') }
+    'Release'    { @('release') }
     'Staging' { @('staging') }
 }
 $mods = switch ($Mod) {

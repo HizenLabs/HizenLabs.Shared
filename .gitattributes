@@ -1,0 +1,11 @@
+# These run inside the Linux containers. Force LF regardless of a contributor's
+# core.autocrlf setting, or the shebang becomes `bash\r` and the build fails.
+*.sh        text eol=lf
+Dockerfile  text eol=lf
+*.dockerfile text eol=lf
+entrypoint.sh   text eol=lf
+build-install.sh text eol=lf
+run-extra.sh    text eol=lf
+
+# Windows-side scripts stay CRLF.
+*.ps1 text eol=crlf

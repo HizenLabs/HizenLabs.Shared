@@ -23,8 +23,9 @@
 
   <!-- Game + framework assemblies for net48 projects that opt in. The refs dir already
        holds the right set per target (game + Carbon, or game + Oxide). Excluded:
-         - System*/mscorlib/netstandard/Mono.*/I18N* : BCL + facades resolved from the net48
+         - base System*/mscorlib/netstandard/Mono.*/I18N* : BCL + facades resolved from the net48
            targeting pack instead of the game's runtime copies (avoids corlib/version clashes).
+           The modern System.* extensions that Carbon ships (Span/Memory) are re-added below.
          - Microsoft.* : SDK shims Carbon bundles (e.g. Microsoft.Bcl.AsyncInterfaces,
            Microsoft.Win32.Registry) that ship mutually-inconsistent versions and conflict at
            reference resolution (MSB3277). Plugins never use them; the old curated managed set
@@ -32,6 +33,23 @@
   <ItemGroup Condition="'$(TargetFramework)' == 'net48' AND '$(ReferenceRustAssemblies)' == 'true'">
     <Reference Include="$(RustManagedDir)/*.dll"
                Exclude="$(RustManagedDir)/System*.dll;$(RustManagedDir)/mscorlib.dll;$(RustManagedDir)/netstandard.dll;$(RustManagedDir)/Mono.*.dll;$(RustManagedDir)/Microsoft.*.dll;$(RustManagedDir)/I18N*.dll">
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <!-- Modern System.* extensions Carbon ships in its managed set (Span<T>/Memory<T> etc.). The
+       net48 targeting pack does NOT have these, so referencing the game's copies is additive (no
+       version clash) and restores the "latest .NET on Mono" surface the old archive relied on
+       (it referenced System.Memory + System.Buffers from managed). Exists-guarded so a refs set
+       that lacks one just skips it. -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'net48' AND '$(ReferenceRustAssemblies)' == 'true'">
+    <Reference Include="$(RustManagedDir)/System.Memory.dll" Condition="Exists('$(RustManagedDir)/System.Memory.dll')">
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="$(RustManagedDir)/System.Buffers.dll" Condition="Exists('$(RustManagedDir)/System.Buffers.dll')">
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="$(RustManagedDir)/System.Runtime.CompilerServices.Unsafe.dll" Condition="Exists('$(RustManagedDir)/System.Runtime.CompilerServices.Unsafe.dll')">
       <Private>false</Private>
     </Reference>
   </ItemGroup>

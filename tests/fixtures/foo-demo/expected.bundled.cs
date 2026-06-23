@@ -6,7 +6,8 @@ namespace Oxide.Plugins;
 // Demo plugin authored the HizenLabs way: platform-neutral namespace, derives from the shared
 // PluginBase marker, and leans on shared code. A `/foo` chat command replies with text built by
 // the shared service. See expected.bundled.cs for what the bundler turns this into.
-public class FooPlugin : 
+[Info("Foo Plugin", "hizen", "1.2.3")]
+public class FooPlugin :
 #if CARBON
     CarbonPlugin
 #else

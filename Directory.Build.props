@@ -54,19 +54,50 @@
     </Reference>
   </ItemGroup>
 
-  <!-- Deploy: copy the selected plugin(s) into the active target server's plugins folder,
-       which the running container hot-loads. The target server is whichever
-       Configuration|Platform you built (Release|Carbon -> rust-carbon-release). Opt-in per
-       developer via a git-ignored Deploy.local.props at the plugin repo root (see
-       Deploy.local.props.example). Version stamping is intentionally NOT done here - that
-       happens in the release workflow. -->
+  <!-- Deploy: bundle the selected plugin(s) and copy the bundled single .cs into the active target
+       server's plugins folder, which the running container hot-loads - so the server runs the same
+       artifact players get (inlined shared code, #if CARBON split, [Info] stamped). The target
+       server is whichever Configuration|Platform you built (Release|Carbon -> rust-carbon-release).
+       Opt-in per developer via a git-ignored Deploy.local.props at the plugin repo root (see
+       Deploy.local.props.example).
+
+       Flow: build the bundler (via the build engine, not a nested process) -> bundle each plugin to
+       an intermediate staging dir, compile-checked against the server's managed refs -> on success,
+       copy the staged .cs to the live plugins folder. A compile failure fails the build; the staged
+       .cs is left for inspection and the bundler prints navigable errors pointing into it. Nothing
+       broken is ever copied to the server. -->
   <Target Name="DeployPlugins" AfterTargets="Build" Condition="'$(DeployEnabled)' == 'true' AND '@(DeployPlugin)' != ''">
     <PropertyGroup>
       <_PluginsDir>$([MSBuild]::NormalizeDirectory('$(RustManagedDir)', '..', 'plugins'))</_PluginsDir>
+      <_BundlerProj>$(MSBuildThisFileDirectory)src\HizenLabs.Bundler\HizenLabs.Bundler.csproj</_BundlerProj>
+      <_BundlerDll>$(MSBuildThisFileDirectory)src\HizenLabs.Bundler\bin\$(Platform)\$(Configuration)\net10.0\hizenbundle.dll</_BundlerDll>
+      <_SharedRuntimeDir>$(MSBuildThisFileDirectory)src\HizenLabs.Shared</_SharedRuntimeDir>
+      <_BundleStageDir>$(MSBuildProjectDirectory)\obj\bundled\$(Configuration)\$(Platform)</_BundleStageDir>
+      <!-- Compile-check the bundle against the platform we're building for. -->
+      <_RefsFlag Condition="'$(Platform)' == 'Carbon'">--carbon-refs</_RefsFlag>
+      <_RefsFlag Condition="'$(Platform)' != 'Carbon'">--oxide-refs</_RefsFlag>
     </PropertyGroup>
-    <MakeDir Directories="$(_PluginsDir)" />
-    <Copy SourceFiles="@(DeployPlugin)" DestinationFolder="$(_PluginsDir)" SkipUnchangedFiles="true" />
-    <Message Importance="high" Text="[deploy] @(DeployPlugin->'%(Filename)%(Extension)', ', ') -> $(_PluginsDir)" />
+
+    <!-- Build the bundler once with the current matrix so its dll is present to exec. -->
+    <MSBuild Projects="$(_BundlerProj)" Targets="Build"
+             Properties="Configuration=$(Configuration);Platform=$(Platform)" />
+
+    <MakeDir Directories="$(_BundleStageDir);$(_PluginsDir)" />
+
+    <!-- One bundle per plugin (item batching). The shared-dir flag is passed twice: the shared
+         runtime and the plugin's own folder, so plugin-local helper types get inlined (the entry
+         file is excluded from the inline set by the bundler). The version is read from the plugin
+         folder's CHANGELOG.md; the dev flag appends a monotonic revision so each local deploy
+         hot-reloads. A non-zero exit (compile failure, or a missing/empty changelog) stops the
+         target before the copy below, so a broken bundle never reaches the server. -->
+    <Exec Command="dotnet exec &quot;$(_BundlerDll)&quot; bundle --plugin &quot;%(DeployPlugin.FullPath)&quot; --shared-dir &quot;$(_SharedRuntimeDir)&quot; --shared-dir &quot;%(DeployPlugin.RootDir)%(DeployPlugin.Directory)&quot; --changelog &quot;%(DeployPlugin.RootDir)%(DeployPlugin.Directory)CHANGELOG.md&quot; --dev --out &quot;$(_BundleStageDir)\%(DeployPlugin.Filename).cs&quot; $(_RefsFlag) &quot;$(RustManagedDir)&quot;" />
+
+    <!-- Reached only if every plugin compiled. Ship the bundled artifacts. -->
+    <ItemGroup>
+      <_BundledPlugin Include="$(_BundleStageDir)\%(DeployPlugin.Filename).cs" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_BundledPlugin)" DestinationFolder="$(_PluginsDir)" SkipUnchangedFiles="true" />
+    <Message Importance="high" Text="[deploy] @(DeployPlugin->'%(Filename)') bundled -> $(_PluginsDir)" />
   </Target>
 
 </Project>

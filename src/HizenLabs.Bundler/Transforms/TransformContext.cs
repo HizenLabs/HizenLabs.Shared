@@ -54,7 +54,9 @@ public sealed class TransformOptions
     public string MarkerNamespace { get; init; } = "HizenLabs.Shared";
 
     /// <summary>
-    /// The version string to inject into the plugin class.
+    /// The version string injected into the plugin's <c>[Info(...)]</c>. Production resolves this
+    /// from the plugin's changelog (<see cref="Changelog.TopVersion"/>, optionally with a dev
+    /// revision); the default here is the fixed placeholder the golden tests pin against.
     /// </summary>
     public string Version { get; init; } = "1.2.3";
 }

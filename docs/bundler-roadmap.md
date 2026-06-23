@@ -1,14 +1,18 @@
 # Bundler roadmap (design)
 
 The inline -> transform pipeline and per-platform compile-check are done (see `transforms.md`).
-Two pieces remain to take a plugin from source to a shipped artifact. This is a design sketch, not
-committed behavior yet.
+Steps 1 and 2 below are now implemented; step 3 (release workflow) remains a design sketch.
 
-## 1. Deploy -> bundler
+## 1. Deploy -> bundler (DONE)
 
-Today `DeployPlugins` (in `Directory.Build.props`) copies **raw** plugin source into the active
-server's `plugins/` folder. It should instead run the bundler and copy the **bundled** single
-`.cs`, so the server hot-loads the same artifact players get.
+`DeployPlugins` (in `Directory.Build.props`) now runs the bundler and copies the **bundled** single
+`.cs` into the active server's `plugins/` folder, so the server hot-loads the same artifact players
+get. It bundles to an intermediate staging dir, compile-checks against the active server's managed
+refs, and only copies on success - a compile failure fails the build and leaves the staged `.cs`
+(with navigable errors) for inspection rather than shipping a broken file. The `--shared-dir` flag
+is passed twice (shared runtime + the plugin's own folder) so plugin-local helpers get inlined.
+
+Original sketch, for reference:
 
 What it needs to pass the bundler:
 
@@ -28,31 +32,29 @@ Open decisions:
   (Inferring matches the bundler's existing "first public type" rule.)
 - Deploy-time compile-check on by default (slower, safer) or opt-in?
 
-## 2. Release workflow
+## 2. Version transform (DONE)
 
-Version is a placeholder in source (`[Info(... "")]`). A release stamps it and publishes the
-bundled `.cs` as the distributable.
+The `version` transform stamps `[Info(name, "hizen", version)]` on the plugin class - rewriting an
+existing `[Info]` or inserting one when absent. Version is `YY.MM.<minutes-in-month>`
+(`PluginVersion.ForDate`), always parseable by the `System.Version` Oxide/Carbon run over the
+attribute, and monotonic. It is computed from the clock at bundle time, not passed via a flag.
+
+## 3. Release workflow
+
+A release publishes the bundled `.cs` as the distributable.
+
+The `[Info]` version is already stamped at bundle time (`YY.MM.<minutes-in-month>`, step 2), so the
+release does not source or stamp a version - the bundled `.cs` is the artifact as-is.
 
 Sketch:
 
-- Trigger on a GitHub Release (tag = version) or a tag push.
-- For each plugin: bundle (with refs, compile-checked for both platforms), then **stamp the
-  version** into the `[Info]` attribute of the emitted `.cs` (the registry of record is the
-  release/tag, not source).
+- Trigger on a GitHub Release or a tag push.
+- For each plugin: bundle (with refs, compile-checked for both platforms).
 - Attach each `<PluginName>.cs` as a **release asset**.
 - The single `.cs` carries both platforms (`#if CARBON`), so one asset serves Carbon and Oxide.
 
 Open decisions:
 
-- Version source: the Git tag, or a per-plugin version file? (Tag is simplest for a mono-release;
-  per-plugin needs independent versioning.)
-- Stamp at emit time (string-replace the empty `[Info]` version) vs. a bundler `--version` flag
-  that writes it during the namespace/base transforms pass. (A `version` transform is the clean
-  home and stays testable.)
+- How the release tag/name relates to the baked-in `YY.MM.<minutes-in-month>` version (the tag
+  records/derives from it rather than overriding it).
 - Changelog/notes source - release body, or generated from commits since last tag.
-
-## Suggested order
-
-1. Deploy -> bundler (unblocks real iteration: edit plugin, build, see the bundled `.cs` hot-load).
-2. A `version` transform + `--version` flag (small, testable, reused by release).
-3. Release workflow (wraps 1 + 2 in CI and publishes assets).

@@ -1,0 +1,105 @@
+# Reusable release workflow for HizenLabs plugin repos (free + premium).
+#
+# A plugin lives in its own folder under src/ containing exactly <Name>.cs and CHANGELOG.md. The
+# changelog is the source of truth for the version (newest "## [X.Y.Z]" on top). For each plugin
+# this workflow: validates the changelog policy, and if the top version has no release yet, bundles
+# the plugin into one deployable .cs and publishes a GitHub release (tag "<Name>/v<version>", asset
+# = the bundled .cs, notes = the top changelog entry). No compile-check here - that is the local
+# deploy gate; CI trusts that what you bundled locally for both platforms is what you push.
+#
+# Callers (free/premium) reference this with a tiny wrapper:
+#   jobs:
+#     release:
+#       uses: HizenLabs/HizenLabs.Shared/.github/workflows/release.yml@main
+#       permissions:
+#         contents: write
+name: Release plugins
+
+on:
+  workflow_call:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (with shared submodule)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Build bundler
+        run: dotnet build shared/src/HizenLabs.Bundler/HizenLabs.Bundler.csproj -c Release -p:Platform=Carbon
+
+      - name: Validate, bundle, and release each plugin
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          BUNDLER="shared/src/HizenLabs.Bundler/bin/Carbon/Release/net10.0/hizenbundle.dll"
+          SHARED_RUNTIME="shared/src/HizenLabs.Shared"
+          DIST="dist"
+          mkdir -p "$DIST"
+
+          shopt -s globstar nullglob
+          changelogs=(src/**/CHANGELOG.md)
+          if [[ ${#changelogs[@]} -eq 0 ]]; then
+            echo "no plugin CHANGELOG.md found under src/; nothing to release"
+            exit 0
+          fi
+
+          for changelog in "${changelogs[@]}"; do
+            folder="$(dirname "$changelog")"
+            name="$(basename "$folder")"
+            entry="$folder/$name.cs"
+            echo "::group::$name"
+
+            if [[ ! -f "$entry" ]]; then
+              echo "::error file=$changelog::expected entry file $entry next to CHANGELOG.md"
+              exit 1
+            fi
+
+            # Policy: oldest entry is 1.0.0, each step a canonical major/minor/patch bump.
+            dotnet exec "$BUNDLER" validate --changelog "$changelog"
+
+            mapfile -t tokens < <(dotnet exec "$BUNDLER" version --all --changelog "$changelog")
+            top="${tokens[0]}"
+            tag="$name/v$top"
+
+            # Never accumulate: every entry below the top must already be released.
+            for ((i = 1; i < ${#tokens[@]}; i++)); do
+              if ! gh release view "$name/v${tokens[$i]}" >/dev/null 2>&1; then
+                echo "::error file=$changelog::$name has unreleased version ${tokens[$i]} below the top ($top). Release one version at a time."
+                exit 1
+              fi
+            done
+
+            if gh release view "$tag" >/dev/null 2>&1; then
+              echo "$name v$top already released; skipping"
+              echo "::endgroup::"
+              continue
+            fi
+
+            out="$DIST/$name.cs"
+            dotnet exec "$BUNDLER" bundle \
+              --plugin "$entry" \
+              --shared-dir "$SHARED_RUNTIME" \
+              --shared-dir "$folder" \
+              --changelog "$changelog" \
+              --out "$out"
+
+            notes="$(dotnet exec "$BUNDLER" notes --changelog "$changelog")"
+            gh release create "$tag" "$out" \
+              --title "$name v$top" \
+              --notes "$notes" \
+              --target "$GITHUB_SHA"
+            echo "released $tag"
+            echo "::endgroup::"
+          done

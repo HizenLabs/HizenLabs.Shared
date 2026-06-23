@@ -52,4 +52,9 @@ public sealed class TransformOptions
     /// <summary>Namespace the marker base lives in. Its usings are dropped from the bundle (the
     /// marker is swapped for the platform base, so the import is dead).</summary>
     public string MarkerNamespace { get; init; } = "HizenLabs.Shared";
+
+    /// <summary>
+    /// The version string to inject into the plugin class.
+    /// </summary>
+    public string Version { get; init; } = "1.2.3";
 }

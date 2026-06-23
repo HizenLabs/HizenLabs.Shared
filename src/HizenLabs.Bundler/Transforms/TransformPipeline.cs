@@ -14,6 +14,7 @@ public static class TransformPipeline
     [
         new BaseClassTransform(),
         new NamespaceTransform(),
+        new VersionTransform(),
     ];
 
     public static string Run(

@@ -61,12 +61,25 @@
        Opt-in per developer via a git-ignored Deploy.local.props at the plugin repo root (see
        Deploy.local.props.example).
 
-       Flow: build the bundler (via the build engine, not a nested process) -> bundle each plugin to
-       an intermediate staging dir, compile-checked against the server's managed refs -> on success,
-       copy the staged .cs to the live plugins folder. A compile failure fails the build; the staged
-       .cs is left for inspection and the bundler prints navigable errors pointing into it. Nothing
-       broken is ever copied to the server. -->
-  <Target Name="DeployPlugins" AfterTargets="Build" Condition="'$(DeployEnabled)' == 'true' AND '@(DeployPlugin)' != ''">
+       Plugins are listed by NAME (the .cs filename, no path, no extension). Each name is resolved
+       to its source file anywhere under the repo's src/ tree, and the plugin's own folder (for
+       CHANGELOG.md and plugin-local helper inlining) is derived from that. Listing a name that has
+       no matching .cs fails the build with a clear message.
+
+       Flow: resolve names -> build the bundler (via the build engine, not a nested process) ->
+       bundle each plugin to an intermediate staging dir, compile-checked against the server's
+       managed refs -> on success, copy the staged .cs to the live plugins folder. A compile
+       failure fails the build; the staged .cs is left for inspection and the bundler prints
+       navigable errors pointing into it. Nothing broken is ever copied to the server. -->
+  <Target Name="DeployPlugins" AfterTargets="Build" Condition="'$(DeployEnabled)' == 'true' AND '$(DeployTarget)' == 'true' AND '@(DeployPlugin)' != ''">
+    <!-- Resolve each plugin NAME to its source file under src/. The repo root is one level up
+         from this shared submodule (<repo>/shared -> <repo>), so plugin sources live in <repo>/src. -->
+    <ItemGroup>
+      <_DeployPluginFile Include="$(MSBuildThisFileDirectory)..\src\**\%(DeployPlugin.Identity).cs" />
+    </ItemGroup>
+    <Error Condition="@(_DeployPluginFile->Count()) &lt; @(DeployPlugin->Count())"
+           Text="[deploy] A listed plugin has no matching .cs under src/. Requested: @(DeployPlugin). Resolved: @(_DeployPluginFile->'%(Filename)'). List plugins by their .cs filename only (no path, no extension)." />
+
     <PropertyGroup>
       <_PluginsDir>$([MSBuild]::NormalizeDirectory('$(RustManagedDir)', '..', 'plugins'))</_PluginsDir>
       <_BundlerProj>$(MSBuildThisFileDirectory)src\HizenLabs.Bundler\HizenLabs.Bundler.csproj</_BundlerProj>
@@ -84,20 +97,21 @@
 
     <MakeDir Directories="$(_BundleStageDir);$(_PluginsDir)" />
 
-    <!-- One bundle per plugin (item batching). The shared-dir flag is passed twice: the shared
-         runtime and the plugin's own folder, so plugin-local helper types get inlined (the entry
-         file is excluded from the inline set by the bundler). The version is read from the plugin
-         folder's CHANGELOG.md; the dev flag appends a monotonic revision so each local deploy
-         hot-reloads. A non-zero exit (compile failure, or a missing/empty changelog) stops the
-         target before the copy below, so a broken bundle never reaches the server. -->
-    <Exec Command="dotnet exec &quot;$(_BundlerDll)&quot; bundle --plugin &quot;%(DeployPlugin.FullPath)&quot; --shared-dir &quot;$(_SharedRuntimeDir)&quot; --shared-dir &quot;%(DeployPlugin.RootDir)%(DeployPlugin.Directory)&quot; --changelog &quot;%(DeployPlugin.RootDir)%(DeployPlugin.Directory)CHANGELOG.md&quot; --dev --out &quot;$(_BundleStageDir)\%(DeployPlugin.Filename).cs&quot; $(_RefsFlag) &quot;$(RustManagedDir)&quot;" />
+    <!-- One bundle per plugin (item batching over the resolved files). The shared-dir flag is
+         passed twice: the shared runtime and the plugin's own folder, so plugin-local helper types
+         get inlined (the entry file is excluded from the inline set by the bundler). The version is
+         read from the plugin folder's CHANGELOG.md; the dev flag appends a monotonic revision so
+         each local deploy hot-reloads. A non-zero exit (compile failure, or a missing/empty
+         changelog) stops the target before the copy below, so a broken bundle never reaches the
+         server. -->
+    <Exec Command="dotnet exec &quot;$(_BundlerDll)&quot; bundle --plugin &quot;%(_DeployPluginFile.FullPath)&quot; --shared-dir &quot;$(_SharedRuntimeDir)&quot; --shared-dir &quot;%(_DeployPluginFile.RootDir)%(_DeployPluginFile.Directory)&quot; --changelog &quot;%(_DeployPluginFile.RootDir)%(_DeployPluginFile.Directory)CHANGELOG.md&quot; --dev --out &quot;$(_BundleStageDir)\%(_DeployPluginFile.Filename).cs&quot; $(_RefsFlag) &quot;$(RustManagedDir)&quot;" />
 
     <!-- Reached only if every plugin compiled. Ship the bundled artifacts. -->
     <ItemGroup>
-      <_BundledPlugin Include="$(_BundleStageDir)\%(DeployPlugin.Filename).cs" />
+      <_BundledPlugin Include="$(_BundleStageDir)\%(_DeployPluginFile.Filename).cs" />
     </ItemGroup>
     <Copy SourceFiles="@(_BundledPlugin)" DestinationFolder="$(_PluginsDir)" SkipUnchangedFiles="true" />
-    <Message Importance="high" Text="[deploy] @(DeployPlugin->'%(Filename)') bundled -> $(_PluginsDir)" />
+    <Message Importance="high" Text="[deploy] @(_DeployPluginFile->'%(Filename)') bundled -> $(_PluginsDir)" />
   </Target>
 
 </Project>

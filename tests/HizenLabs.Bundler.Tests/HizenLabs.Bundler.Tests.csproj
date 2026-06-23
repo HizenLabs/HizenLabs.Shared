@@ -26,4 +26,12 @@
     <None Include="cases\**\*" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
+  <!-- End-to-end bundler fixtures (plugin + shared + expected bundle). They live outside the
+       project cone so they aren't compiled; copy them next to the test dll as data. -->
+  <ItemGroup>
+    <None Include="..\fixtures\**\*"
+          Link="fixtures\%(RecursiveDir)%(Filename)%(Extension)"
+          CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

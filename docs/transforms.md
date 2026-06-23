@@ -4,10 +4,16 @@ The bundler turns an authored plugin into the single `.cs` the server loads. It 
 phases:
 
 1. **Inline** - reachable shared types are merged into the plugin class as `private` nested
-   members (reachability tree-shaking). One structural step; lives in `Bundler.cs`.
+   members (reachability tree-shaking). The author's neutral namespace is kept here, and the
+   marker base (`PluginBase`) is deliberately *not* inlined - it is swapped in phase 2. One
+   structural step; lives in `Bundler.cs`.
 2. **Transform** - a pipeline of small, independent edits applied to the inlined source. This is
    where the `#if CARBON` split is produced (namespace, base class, ...). This is the part you
    extend.
+
+`Bundler.Bundle` runs both phases and, when given a server's managed references
+(`--carbon-refs` / `--oxide-refs`), compile-checks the emitted file under each platform. See
+`tests/fixtures/foo-demo/` for a worked plugin and its `expected.bundled.cs` output.
 
 A transform is edit-based on purpose: its output isn't a single valid syntax tree (it carries
 both halves of an `#if`), so it returns `TextChange`s rather than a rewritten tree.

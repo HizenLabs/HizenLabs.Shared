@@ -48,4 +48,8 @@ public sealed class TransformOptions
 
     /// <summary>The shared marker base the author derives from; swapped for the platform base.</summary>
     public string BaseMarker { get; init; } = "PluginBase";
+
+    /// <summary>Namespace the marker base lives in. Its usings are dropped from the bundle (the
+    /// marker is swapped for the platform base, so the import is dead).</summary>
+    public string MarkerNamespace { get; init; } = "HizenLabs.Shared";
 }

@@ -1,13 +1,23 @@
-// HizenLabs.Bundler CLI - merge a plugin + the shared code it uses into one .cs.
+// HizenLabs.Bundler CLI - merge a plugin + the shared code it uses into one deployable .cs.
 //
-//   hizenbundle --plugin <file> --shared-dir <dir> --namespace <ns> [--out <file>]
+//   hizenbundle --plugin <file> --shared-dir <dir> [--out <file>]
+//               [--carbon-refs <dir>[;<dir>...]] [--oxide-refs <dir>[;<dir>...]]
+//
+// The bundler keeps the author's neutral namespace and `: PluginBase`; the transform pipeline
+// rewrites them into the #if CARBON / #else split. Pass per-platform reference dirs to have the
+// emitted file compile-checked under Carbon and/or Oxide (game + framework assemblies).
 using HizenLabs.Bundler;
 
 var opts = ParseArgs(args);
 if (opts is null) return 2;
 
 var sharedFiles = Directory.EnumerateFiles(opts.SharedDir, "*.cs", SearchOption.AllDirectories).ToList();
-var result = Bundler.Bundle(new BundleRequest(opts.Plugin, sharedFiles, opts.Namespace));
+var result = Bundler.Bundle(new BundleRequest(
+    opts.Plugin,
+    sharedFiles,
+    Transform: null,
+    CarbonRefDirs: opts.CarbonRefs,
+    OxideRefDirs: opts.OxideRefs));
 
 if (opts.Out is not null)
 {
@@ -20,39 +30,57 @@ else
 }
 
 Console.Error.WriteLine($"[bundler] inlined {result.InlinedTypes.Count} shared type(s): {string.Join(", ", result.InlinedTypes)}");
-if (result.Compiles)
+
+if (!result.Checked)
 {
-    Console.Error.WriteLine("[bundler] output compiles OK");
+    Console.Error.WriteLine("[bundler] compile-check skipped (no --carbon-refs/--oxide-refs given)");
     return 0;
 }
 
-Console.Error.WriteLine("[bundler] output FAILED to compile:");
-foreach (var d in result.Diagnostics)
-    Console.Error.WriteLine($"  {d.Id}: {d.GetMessage()}");
-return 1;
+foreach (var check in result.Checks)
+{
+    if (check.Compiles)
+    {
+        Console.Error.WriteLine($"[bundler] {check.Platform}: compiles OK");
+    }
+    else
+    {
+        Console.Error.WriteLine($"[bundler] {check.Platform}: FAILED to compile:");
+        foreach (var d in check.Errors)
+            Console.Error.WriteLine($"  {d.Id}: {d.GetMessage()}");
+    }
+}
+return result.Compiles ? 0 : 1;
 
 static Options? ParseArgs(string[] args)
 {
-    string? plugin = null, sharedDir = null, ns = null, outPath = null;
+    string? plugin = null, sharedDir = null, outPath = null;
+    string[]? carbonRefs = null, oxideRefs = null;
     for (var i = 0; i < args.Length; i++)
     {
         switch (args[i])
         {
             case "--plugin": plugin = args[++i]; break;
             case "--shared-dir": sharedDir = args[++i]; break;
-            case "--namespace": ns = args[++i]; break;
             case "--out": outPath = args[++i]; break;
+            case "--carbon-refs": carbonRefs = SplitDirs(args[++i]); break;
+            case "--oxide-refs": oxideRefs = SplitDirs(args[++i]); break;
             default:
                 Console.Error.WriteLine($"unknown argument: {args[i]}");
                 return null;
         }
     }
-    if (plugin is null || sharedDir is null || ns is null)
+    if (plugin is null || sharedDir is null)
     {
-        Console.Error.WriteLine("usage: hizenbundle --plugin <file> --shared-dir <dir> --namespace <ns> [--out <file>]");
+        Console.Error.WriteLine(
+            "usage: hizenbundle --plugin <file> --shared-dir <dir> [--out <file>] " +
+            "[--carbon-refs <dir>[;<dir>...]] [--oxide-refs <dir>[;<dir>...]]");
         return null;
     }
-    return new Options(plugin, sharedDir, ns, outPath);
+    return new Options(plugin, sharedDir, outPath, carbonRefs, oxideRefs);
 }
 
-sealed record Options(string Plugin, string SharedDir, string Namespace, string? Out);
+static string[] SplitDirs(string value) =>
+    value.Split(new[] { ';', Path.PathSeparator }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+sealed record Options(string Plugin, string SharedDir, string? Out, string[]? CarbonRefs, string[]? OxideRefs);

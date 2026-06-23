@@ -11,6 +11,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HizenLabs.CodeGen", "src\Hi
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HizenLabs.Bundler", "src\HizenLabs.Bundler\HizenLabs.Bundler.csproj", "{486AA224-F15C-48FF-842D-EE35C9036466}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{0AB3BF05-4346-4AA6-1389-037BE0695223}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HizenLabs.Bundler.Tests", "tests\HizenLabs.Bundler.Tests\HizenLabs.Bundler.Tests.csproj", "{4A746573-21C0-4083-8241-2E87F15D840E}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Release|Carbon = Release|Carbon
@@ -43,6 +47,14 @@ Global
 		{486AA224-F15C-48FF-842D-EE35C9036466}.Staging|Carbon.Build.0 = Staging|Carbon
 		{486AA224-F15C-48FF-842D-EE35C9036466}.Staging|Oxide.ActiveCfg = Staging|Oxide
 		{486AA224-F15C-48FF-842D-EE35C9036466}.Staging|Oxide.Build.0 = Staging|Oxide
+		{4A746573-21C0-4083-8241-2E87F15D840E}.Release|Carbon.ActiveCfg = Release|Carbon
+		{4A746573-21C0-4083-8241-2E87F15D840E}.Release|Carbon.Build.0 = Release|Carbon
+		{4A746573-21C0-4083-8241-2E87F15D840E}.Release|Oxide.ActiveCfg = Release|Oxide
+		{4A746573-21C0-4083-8241-2E87F15D840E}.Release|Oxide.Build.0 = Release|Oxide
+		{4A746573-21C0-4083-8241-2E87F15D840E}.Staging|Carbon.ActiveCfg = Staging|Carbon
+		{4A746573-21C0-4083-8241-2E87F15D840E}.Staging|Carbon.Build.0 = Staging|Carbon
+		{4A746573-21C0-4083-8241-2E87F15D840E}.Staging|Oxide.ActiveCfg = Staging|Oxide
+		{4A746573-21C0-4083-8241-2E87F15D840E}.Staging|Oxide.Build.0 = Staging|Oxide
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -51,5 +63,6 @@ Global
 		{E79FF7C9-89E1-431A-AFE0-3638CFECFC67} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{72E1CBC3-36C5-4852-A0B2-20489C7474B2} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{486AA224-F15C-48FF-842D-EE35C9036466} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
+		{4A746573-21C0-4083-8241-2E87F15D840E} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 	EndGlobalSection
 EndGlobal

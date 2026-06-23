@@ -28,6 +28,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution 
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "docs", "docs", "{56506FBF-9232-4776-89B4-14AA162FD688}"
 	ProjectSection(SolutionItems) = preSolution
+		docs\authoring.md = docs\authoring.md
+		docs\bundler-roadmap.md = docs\bundler-roadmap.md
 		docs\transforms.md = docs\transforms.md
 	EndProjectSection
 EndProject

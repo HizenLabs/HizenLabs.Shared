@@ -22,11 +22,16 @@
   </PropertyGroup>
 
   <!-- Game + framework assemblies for net48 projects that opt in. The refs dir already
-       holds the right set per target (game + Carbon, or game + Oxide); only the BCL dupes
-       in Unity's Managed folder are excluded (resolved from the net48 targeting pack). -->
+       holds the right set per target (game + Carbon, or game + Oxide). Excluded:
+         - System*/mscorlib/netstandard/Mono.*/I18N* : BCL + facades resolved from the net48
+           targeting pack instead of the game's runtime copies (avoids corlib/version clashes).
+         - Microsoft.* : SDK shims Carbon bundles (e.g. Microsoft.Bcl.AsyncInterfaces,
+           Microsoft.Win32.Registry) that ship mutually-inconsistent versions and conflict at
+           reference resolution (MSB3277). Plugins never use them; the old curated managed set
+           had no Microsoft.* either. -->
   <ItemGroup Condition="'$(TargetFramework)' == 'net48' AND '$(ReferenceRustAssemblies)' == 'true'">
     <Reference Include="$(RustManagedDir)/*.dll"
-               Exclude="$(RustManagedDir)/System*.dll;$(RustManagedDir)/mscorlib.dll;$(RustManagedDir)/netstandard.dll;$(RustManagedDir)/Mono.*.dll;$(RustManagedDir)/Microsoft.CSharp.dll;$(RustManagedDir)/I18N*.dll">
+               Exclude="$(RustManagedDir)/System*.dll;$(RustManagedDir)/mscorlib.dll;$(RustManagedDir)/netstandard.dll;$(RustManagedDir)/Mono.*.dll;$(RustManagedDir)/Microsoft.*.dll;$(RustManagedDir)/I18N*.dll">
       <Private>false</Private>
     </Reference>
   </ItemGroup>

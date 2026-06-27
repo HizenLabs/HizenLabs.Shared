@@ -41,38 +41,51 @@ foreach ($inst in Resolve-Instances -Mod $Mod -Branch $Branch) {
     }
 
     $owners = Set-ServerUsers -Paths $p -Cfg $cfg
-    New-Item -ItemType Directory -Force -Path $p.LogDir | Out-Null
-    $log = Join-Path $p.LogDir ("RustDedicated_{0}.log" -f (Get-Date -Format 'yyyyMMddHHmmss'))
 
     $game = $p.PortBase; $rcon = $p.PortBase + 1; $query = $p.PortBase + 2; $app = $p.PortBase + 3
     $hostName = "{0} {1} (Local :{2})" -f $p.Mod, $p.Branch, $game
 
-    $argList = @(
+    # Double-quote only the values that contain spaces.
+    function q { param($s) '"' + $s + '"' }
+    $serverArgs = @(
         '-batchmode', '-nographics',
-        '-logfile', "`"$log`"",
         '+server.identity', $p.Identity,
         '+server.ip', '0.0.0.0',
         '+server.port', $game,
         '+server.queryport', $query,
-        '+server.level', "`"$($cfg.ServerLevel)`"",
+        '+server.level', (q $cfg.ServerLevel),
         '+server.seed', $cfg.Seed,
         '+server.worldsize', $cfg.WorldSize,
         '+server.maxplayers', $cfg.MaxPlayers,
         '+server.tickrate', $cfg.Tickrate,
-        '+server.hostname', "`"$hostName`"",
+        '+server.hostname', (q $hostName),
         '+rcon.ip', '127.0.0.1',
         '+rcon.port', $rcon,
-        '+rcon.password', "`"$($cfg.RconPassword)`"",
+        '+rcon.password', (q $cfg.RconPassword),
         '+rcon.web', '1',
         '+app.listenip', '127.0.0.1',
         '+app.port', $app
-    )
+    ) -join ' '
 
-    # Launch directly (not via cmd) so -PassThru gives the REAL RustDedicated PID;
-    # a console app started this way gets its own window = the live server console.
-    $proc = Start-Process -FilePath $p.Exe -WorkingDirectory $p.Server -ArgumentList $argList -PassThru
-    Set-Content -Path $p.PidFile -Value $proc.Id
+    # Launch through `cmd start` so each server gets a REAL new console window (its
+    # live, type-able console), even when this script runs inside VS Code / Windows
+    # Terminal -- a bare Start-Process there just attaches the child to this shell.
+    # The explicit quoted title stops `start` from treating the quoted exe path as
+    # the title. No -logfile: the window shows the live console. We can't get the
+    # PID from `start`, so find it by identity right after.
+    $cmdLine = '/c start "rust-{0}" /D "{1}" "{2}" {3}' -f $inst, $p.Server, $p.Exe, $serverArgs
+    Start-Process -FilePath 'cmd.exe' -ArgumentList $cmdLine | Out-Null
 
-    Write-Host ("Started {0} (PID {1}) on :{2}  rcon :{3}  owners:{4}  log: {5}" -f `
-        $inst, $proc.Id, $game, $rcon, $owners, (Split-Path $log -Leaf)) -ForegroundColor Green
+    $proc = $null
+    for ($i = 0; $i -lt 20 -and -not $proc; $i++) {
+        Start-Sleep -Milliseconds 500
+        $proc = Find-ServerProcess -Paths $p
+    }
+    if ($proc) {
+        Set-Content -Path $p.PidFile -Value $proc.ProcessId
+        Write-Host ("Started {0} (PID {1}) on :{2}  rcon :{3}  owners:{4}" -f `
+            $inst, $proc.ProcessId, $game, $rcon, $owners) -ForegroundColor Green
+    } else {
+        Write-Host ("Launched {0} but couldn't confirm the process -- check its window for a startup error." -f $inst) -ForegroundColor Yellow
+    }
 }

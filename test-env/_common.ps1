@@ -76,15 +76,33 @@ function Import-LocalConfig {
     return (& $example)
 }
 
-# Returns the running RustDedicated process for an instance (via its pidfile), or
-# $null. Cleans up a stale pidfile so callers can trust a non-null result.
+# Finds the live RustDedicated for an instance by the unique +server.identity on
+# its command line (we launch via `cmd start`, so we can't capture the PID at
+# spawn time). Returns a CIM object with .ProcessId, or $null.
+function Find-ServerProcess {
+    param([Parameter(Mandatory)]$Paths)
+    $needle = "+server.identity $($Paths.Identity)"
+    Get-CimInstance Win32_Process -Filter "Name='RustDedicated.exe'" -ErrorAction SilentlyContinue |
+        Where-Object { $_.CommandLine -and $_.CommandLine -match [regex]::Escape($needle) } |
+        Select-Object -First 1
+}
+
+# Returns the running RustDedicated process for an instance, or $null. Trusts the
+# pidfile first, then falls back to matching by identity (and re-records the pid),
+# so it self-heals after a `cmd start` launch or a deleted pidfile.
 function Get-ServerProcess {
     param([Parameter(Mandatory)]$Paths)
-    if (-not (Test-Path $Paths.PidFile)) { return $null }
-    $procId = (Get-Content $Paths.PidFile -ErrorAction SilentlyContinue | Select-Object -First 1)
-    $proc = if ($procId) { Get-Process -Id $procId -ErrorAction SilentlyContinue } else { $null }
-    if ($proc -and $proc.ProcessName -eq 'RustDedicated') { return $proc }
-    Remove-Item $Paths.PidFile -ErrorAction SilentlyContinue
+    if (Test-Path $Paths.PidFile) {
+        $procId = (Get-Content $Paths.PidFile -ErrorAction SilentlyContinue | Select-Object -First 1)
+        $proc = if ($procId) { Get-Process -Id $procId -ErrorAction SilentlyContinue } else { $null }
+        if ($proc -and $proc.ProcessName -eq 'RustDedicated') { return $proc }
+        Remove-Item $Paths.PidFile -ErrorAction SilentlyContinue
+    }
+    $cim = Find-ServerProcess -Paths $Paths
+    if ($cim) {
+        Set-Content -Path $Paths.PidFile -Value $cim.ProcessId
+        return (Get-Process -Id $cim.ProcessId -ErrorAction SilentlyContinue)
+    }
     return $null
 }
 

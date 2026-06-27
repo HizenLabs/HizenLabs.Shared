@@ -41,6 +41,12 @@
     # default assumes the Carbon fork sits beside the plugins repo under hizenlabs\.
     CarbonLocalBuildPath = '..\..\..\carbon\Carbon\release\.tmp\Debug'
 
+    # Rust game branch carbon-debug installs -- MUST match the Rust channel your
+    # local Carbon build targets, or the game assemblies/hooks won't line up:
+    #   Carbon fork on rust_beta/staging -> 'staging'    (default)
+    #   Carbon fork on main              -> 'public'
+    CarbonDebugGameBranch = 'staging'
+
     # Mono soft-debugger endpoint baked into carbon-debug's doorstop_config.ini --
     # attach Visual Studio (Tools for Unity) here. Suspend freezes boot until a
     # debugger attaches (use it to catch early-init/bootstrap bugs).

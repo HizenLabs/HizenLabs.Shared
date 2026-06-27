@@ -59,12 +59,17 @@ soft-debugger enabled, so you can attach Visual Studio and step through Carbon
 (not just plugins). Carbon is injected into `RustDedicated` via UnityDoorstop, so
 this is **attach** debugging — there is no "run Carbon" target.
 
+> **Match the Rust channel.** A Carbon build targets a specific Rust branch, so
+> `CarbonDebugGameBranch` must match your Carbon fork: `rust_beta/staging` -> `staging`
+> (default), `main` -> `public`. A mismatch loads the wrong game assemblies/hooks.
+
 ```powershell
 # 1. Build the overlay in the Carbon fork (one-time per change):
 #      tools\build\win\build_debug_noarchive.bat   -> release\.tmp\Debug
 # 2. Point Local.config.ps1 at it (default already assumes hizenlabs\carbon\Carbon):
-#      CarbonLocalBuildPath = '..\..\..\carbon\Carbon\release\.tmp\Debug'
-.\install.ps1 -Branch Debug    # SteamCMD game + deploy local Carbon + enable debugger
+#      CarbonLocalBuildPath  = '..\..\..\carbon\Carbon\release\.tmp\Debug'
+#      CarbonDebugGameBranch = 'staging'   # match your Carbon fork's Rust channel
+.\install.ps1 -Branch Debug    # SteamCMD game (matched branch) + local Carbon + debugger
 .\start.ps1   -Branch Debug    # launches on :28240; prints the attach address
 #   -> in Visual Studio: Debug > Attach Unity Debugger > add 127.0.0.1:55555
 ```

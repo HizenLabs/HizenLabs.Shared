@@ -149,6 +149,15 @@ function Get-CarbonDebugAddress {
     return '127.0.0.1:55555'
 }
 
+# Rust game branch the carbon-debug server installs -- MUST match the Rust channel
+# your local Carbon build targets (rust_beta/staging -> 'staging'; main -> 'public'),
+# or the game assemblies/hooks won't match. 'public' | 'staging'. Default 'staging'.
+function Get-CarbonDebugGameBranch {
+    param([Parameter(Mandatory)]$Cfg)
+    if ($Cfg.CarbonDebugGameBranch) { return $Cfg.CarbonDebugGameBranch.ToLowerInvariant() }
+    return 'staging'
+}
+
 # Copies a locally-built Carbon overlay (winhttp.dll + doorstop_config.ini + carbon\)
 # over the instance's server install -- the same overlay the downloaded zip applies.
 function Deploy-LocalCarbon {

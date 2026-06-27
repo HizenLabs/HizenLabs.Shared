@@ -70,9 +70,13 @@ foreach ($inst in Resolve-Instances -Mod $Mod -Branch $Branch) {
     New-Item -ItemType Directory -Force -Path $temp | Out-Null
 
     # --- game ---------------------------------------------------------------
-    $betaArgs = if ($p.Branch -eq 'staging') { @('-beta', 'staging') } else { @() }
+    # staging instances use the Rust staging beta; debug uses whatever channel its
+    # local Carbon build targets (CarbonDebugGameBranch); release uses public.
+    $gameBranch = $p.Branch
+    if ($p.Branch -eq 'debug') { $gameBranch = Get-CarbonDebugGameBranch -Cfg $cfg }
+    $betaArgs = if ($gameBranch -eq 'staging') { @('-beta', 'staging') } else { @() }
     $validate = if ($Force) { 'validate' } else { '' }
-    Write-Host "SteamCMD app_update 258550 ($($p.Branch))..." -ForegroundColor DarkGray
+    Write-Host "SteamCMD app_update 258550 ($($p.Branch) -> rust:$gameBranch)..." -ForegroundColor DarkGray
     & $steamExe +force_install_dir (Resolve-Path $p.Server).Path +login anonymous +app_update 258550 @betaArgs $validate +quit
     if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne 7) {
         throw "SteamCMD failed for $inst (exit $LASTEXITCODE)."

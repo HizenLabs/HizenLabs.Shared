@@ -78,7 +78,10 @@ foreach ($inst in Resolve-Instances -Mod $Mod -Branch $Branch) {
         # exe into a fresh console whose handles the debugger chokes on (Rust's
         # ServerConsole -> 'SetConsoleCursorInfo failed'); a bare Start-Process <exe> has
         # no window of its own here. This gives a real server console AND a live debugger.
-        $cmdLine = '/c "{0}" {1}' -f $p.Exe, $serverArgs
+        # /s + wrapping the whole command in an OUTER quote pair is required: the args
+        # contain several quoted values (map, hostname, password), so without it cmd's
+        # quote-stripping mangles the exe path and the server never starts.
+        $cmdLine = '/s /c ""{0}" {1}"' -f $p.Exe, $serverArgs
         Start-Process -FilePath 'cmd.exe' -ArgumentList $cmdLine -WorkingDirectory $p.Server | Out-Null
     }
     else {

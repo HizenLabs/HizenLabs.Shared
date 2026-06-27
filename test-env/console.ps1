@@ -1,20 +1,21 @@
 # =============================================================================
-# Open the in-container server console (tmux attach) of a running Rust test
-# server. Attach is one-at-a-time; when the params match more than one running
-# server you get a numbered picker.
+# Open the in-container server console of a running Rust test server. Attach is
+# one-at-a-time; when the params match more than one running server you get a
+# numbered picker.
 #
 #   .\console.ps1                              # pick from all running servers
 #   .\console.ps1 -Mod Carbon                  # carbon, both branches
 #   .\console.ps1 -Branch Release              # both mods, release only
 #   .\console.ps1 -Mod Carbon -Branch Release  # straight in (single match)
-#   .\console.ps1 -ReadOnly                    # watch only, no keyboard input
 #
 # -Branch: All (default) | Staging | Release      (Release = release game branch)
 # -Mod:    All (default) | Oxide   | Carbon
 #
-# Attaches AS linuxgsm directly (docker exec -it -u linuxgsm ... tmux attach),
-# so the PTY survives. The Docker Desktop "exec" shell loses the PTY at the
-# `su - linuxgsm` layer, which is why tmux is unusable there.
+# Attaches via LinuxGSM's own `console` command (docker exec -it -u linuxgsm
+# <c> ./rustserver console). LinuxGSM runs the server on a *named* tmux socket,
+# not the default one, so a bare `tmux ls`/`tmux attach` can't find it -- the
+# wrapper knows the right socket + session. Exec'ing as linuxgsm directly also
+# keeps the PTY: the Docker Desktop shell loses it at the `su - linuxgsm` layer.
 #
 #   DETACH, server keeps running:   Ctrl+B  then  D
 #
@@ -24,8 +25,7 @@
 [CmdletBinding()]
 param(
     [ValidateSet('All','Staging','Release')][string]$Branch = 'All',
-    [ValidateSet('All','Oxide','Carbon')][string]$Mod = 'All',
-    [switch]$ReadOnly
+    [ValidateSet('All','Oxide','Carbon')][string]$Mod = 'All'
 )
 
 # Numbered console picker. No GUI / no module dependency, so it works in
@@ -80,24 +80,11 @@ if ($targets.Count -eq 0) {
 $container = Select-FromList -Title 'Attach to which server?' -Items $targets
 if (-not $container) { Write-Host 'Cancelled.' -ForegroundColor DarkGray; return }
 
-# LinuxGSM runs the server inside a tmux session; list them and (if several) pick.
-$lsRaw = docker exec -u linuxgsm $container tmux ls 2>&1
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "No tmux session in $container -- the server may still be booting." -ForegroundColor Yellow
-    Write-Host ("tmux said: " + ($lsRaw -join ' ')) -ForegroundColor DarkGray
-    return
-}
-$sessions = @($lsRaw | ForEach-Object { ($_ -split ':')[0] } | Where-Object { $_ })
-
-$session = Select-FromList -Title "Which tmux session in $container?" -Items $sessions
-if (-not $session) { Write-Host 'Cancelled.' -ForegroundColor DarkGray; return }
-
 Write-Host ""
-Write-Host ("Attaching to {0} [{1}] ..." -f $container, $session) -ForegroundColor Green
+Write-Host ("Attaching to {0} ..." -f $container) -ForegroundColor Green
 Write-Host "Detach (server keeps running):  Ctrl+B  then  D" -ForegroundColor Cyan
 Write-Host ""
 
-$attachArgs = @('attach')
-if ($ReadOnly) { $attachArgs += '-r' }
-$attachArgs += @('-t', $session)
-docker exec -it -u linuxgsm $container tmux @attachArgs
+# ./rustserver console = LinuxGSM's tmux attach, on the socket/session it
+# started the server with. Absolute path so it does not depend on exec cwd.
+docker exec -it -u linuxgsm $container /home/linuxgsm/rustserver console

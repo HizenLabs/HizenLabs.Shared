@@ -123,20 +123,21 @@ its own `./servers/rust-carbon-b/` mounts, ports 28240-28243.
 
 ## Console
 
-Attach to a running server's live console (LinuxGSM runs it in tmux). Same
-`-Mod` / `-Branch` params as `start.ps1`; if more than one match is running you
-get a numbered picker. Run from the `test-env` folder (one level up):
+Attach to a running server's live console. Same `-Mod` / `-Branch` params as
+`start.ps1`; if more than one match is running you get a numbered picker. Run
+from the `test-env` folder (one level up):
 
 ```powershell
 .\console.ps1                              # pick from all running servers
 .\console.ps1 -Mod Carbon -Branch Release  # straight in (single match)
-.\console.ps1 -ReadOnly                    # watch only, no keyboard input
 ```
 
 Detach and leave the server running with **Ctrl+B** then **D**. (Ctrl+C is
 forwarded into the console, not a detach; don't type `quit` either -- that stops
-the server.) It attaches as `linuxgsm` directly, so the PTY survives -- unlike
-the Docker Desktop exec shell, which loses it at the `su - linuxgsm` layer.
+the server.) It attaches via LinuxGSM's own `console` command as the `linuxgsm`
+user -- LinuxGSM runs the server on a named tmux socket (so a bare `tmux attach`
+misses it), and exec'ing as `linuxgsm` keeps the PTY the Docker Desktop shell
+loses at the `su - linuxgsm` layer.
 
 ## Files
 

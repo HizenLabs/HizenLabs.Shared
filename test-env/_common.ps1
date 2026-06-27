@@ -221,3 +221,53 @@ function Set-DoorstopMonoDebug {
     Set-Content -Path $ini -Value $text -Encoding ASCII
     Write-Host "Mono debugger enabled on $Address (suspend=$suspendVal)." -ForegroundColor DarkGray
 }
+
+# VSTU can't read Carbon's *embedded* PDBs, so we extract them side-by-side after
+# every deploy. Critical: Deploy-LocalCarbon overwrites the DLLs but leaves old
+# .pdb files in place -> a fresh DLL next to a stale PDB = the mismatch warning on
+# breakpoints. Clearing + re-extracting on each deploy keeps them in lockstep.
+function Update-CarbonDebugSymbols {
+    param([Parameter(Mandatory)]$Paths, [Parameter(Mandatory)]$Cfg)
+    $managed = Join-Path $Paths.Server 'carbon\managed'
+    $tool = $Cfg.ExtractPdbPath
+    if ([string]::IsNullOrWhiteSpace($tool)) {
+        Write-Host "ExtractPdbPath not set in Local.config.ps1 -- skipping PDB extraction." -ForegroundColor DarkYellow
+        return
+    }
+    if (-not [System.IO.Path]::IsPathRooted($tool)) { $tool = Join-Path (Get-TestEnvRoot) $tool }
+
+    # nuke stale pdbs first so a removed/renamed assembly can't leave a mismatch behind
+    Get-ChildItem $managed -Recurse -Filter *.pdb -File -ErrorAction SilentlyContinue |
+        Remove-Item -Force -ErrorAction SilentlyContinue
+
+    Write-Host "Extracting embedded PDBs -> $managed" -ForegroundColor DarkGray
+    if ($tool -like '*.csproj') { & dotnet run --project $tool -c Release -- $managed recurse | Out-Host }
+    else                        { & $tool $managed recurse | Out-Host }
+    if ($LASTEXITCODE -ne 0) { Write-Warning "PDB extraction exited $LASTEXITCODE." }
+}
+
+# Carbon rewrites/merges carbon\config.json and (left to its own devices) will
+# self-update its managed DLLs + hooks over your locally-built ones on boot. Since
+# Deploy-LocalCarbon overlays the whole carbon\ tree each redeploy, re-assert the
+# debug-instance settings every time so they can't drift back.
+function Set-CarbonDebugConfig {
+    param([Parameter(Mandatory)]$Paths)
+    $cfgPath = Join-Path $Paths.Server 'carbon\config.json'
+    if (-not (Test-Path $cfgPath)) {
+        Write-Host "No carbon\config.json yet -- it's created on first boot; re-run this after." -ForegroundColor DarkYellow
+        return
+    }
+    $json = Get-Content $cfgPath -Raw | ConvertFrom-Json
+
+    # Kill both updaters: the main self-update AND the separate hook updater.
+    if ($json.PSObject.Properties.Name -contains 'SelfUpdating') {
+        $json.SelfUpdating.Enabled     = $false
+        $json.SelfUpdating.HookUpdates = $false
+    }
+	
+	$json.DeveloperMode = $true
+
+    ($json | ConvertTo-Json -Depth 32) | Set-Content $cfgPath -Encoding UTF8
+    Write-Host "Carbon self-update + hook-update disabled in config.json." -ForegroundColor DarkGray
+}
+

@@ -36,6 +36,8 @@ if ($wasRunning) {
 }
 
 Deploy-LocalCarbon -Paths $p -Cfg $cfg
+Update-CarbonDebugSymbols -Paths $p -Cfg $cfg
+Set-CarbonDebugConfig -Paths $p
 $dbgAddr = Get-CarbonDebugAddress -Cfg $cfg
 Set-DoorstopMonoDebug -Paths $p -Address $dbgAddr -Suspend ([bool]$cfg.CarbonDebugSuspend)
 Write-Host "Redeployed local Carbon to carbon-debug." -ForegroundColor Green

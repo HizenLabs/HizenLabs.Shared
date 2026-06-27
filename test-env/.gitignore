@@ -1,0 +1,9 @@
+# Your real local config (SteamIDs, rcon password) -- never commit to a public repo.
+Local.config.ps1
+
+# Local installs: huge, and contain copyrighted Facepunch/mod binaries + saves.
+servers/
+.steamcmd/
+
+# Original reference scripts (superseded by install.ps1/start.ps1).
+Scripts/

@@ -121,23 +121,9 @@ its own `./servers/rust-carbon-b/` mounts, ports 28240-28243.
 .\status.ps1     # baked images + all rust- containers and their state/ports
 ```
 
-## Console
-
-Attach to a running server's live console. Same `-Mod` / `-Branch` params as
-`start.ps1`; if more than one match is running you get a numbered picker. Run
-from the `test-env` folder (one level up):
-
-```powershell
-.\console.ps1                              # pick from all running servers
-.\console.ps1 -Mod Carbon -Branch Release  # straight in (single match)
-```
-
-Detach and leave the server running with **Ctrl+B** then **D**. (Ctrl+C is
-forwarded into the console, not a detach; don't type `quit` either -- that stops
-the server.) It attaches via LinuxGSM's own `console` command as the `linuxgsm`
-user -- LinuxGSM runs the server on a named tmux socket (so a bare `tmux attach`
-misses it), and exec'ing as `linuxgsm` keeps the PTY the Docker Desktop shell
-loses at the `su - linuxgsm` layer.
+> **Superseded:** this Docker flow has been replaced by the local-install
+> scripts in the parent `test-env\` folder (`install.ps1`/`start.ps1`/...).
+> See `..\README.md`. This folder is kept for reference.
 
 ## Files
 
@@ -149,7 +135,6 @@ loses at the `su - linuxgsm` layer.
 | `docker-compose.yml` | Four profile-gated services, per-server mounts, no volumes.   |
 | `run-extra.sh`     | Ad-hoc extra instance from a baked image.                      |
 | `reset.ps1` / `status.ps1` | Recreate-fresh / overview.                             |
-| `console.ps1`      | Attach to a running server's tmux console (`../console.ps1`).   |
 | `servers/`         | Per-server `plugins` / `config` / `logs` mounts.               |
 
 ## Notes / gotchas (carried over)

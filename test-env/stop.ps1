@@ -1,37 +1,31 @@
 # =============================================================================
-# Stop Rust test servers (graceful; containers kept so a later start is fast).
-# Use docker\reset.ps1 for a fresh recreate.
+# Stop local Rust test servers started by start.ps1 (by tracked PID).
 #
-#   .\stop.ps1                            # all mods, all branches (default)
-#   .\stop.ps1 -Mod Carbon -Branch Staging
+#   .\stop.ps1                              # all running instances
+#   .\stop.ps1 -Mod Carbon -Branch Staging  # just that one
 #
 # -Branch: All (default) | Staging | Release      (Release = release game branch)
 # -Mod:    All (default) | Oxide   | Carbon
+#
+# This terminates the process. It's a disposable test env (use .\wipe.ps1 for a
+# fresh world), so a hard stop is fine; for a clean save instead, type `quit` in
+# the server's console window before stopping.
 # =============================================================================
 [CmdletBinding()]
 param(
-    [ValidateSet('All','Staging','Release')][string]$Branch = 'All',
-    [ValidateSet('All','Oxide','Carbon')][string]$Mod = 'All'
+    [ValidateSet('All', 'Staging', 'Release')][string]$Branch = 'All',
+    [ValidateSet('All', 'Oxide', 'Carbon')][string]$Mod = 'All'
 )
+. "$PSScriptRoot\_common.ps1"
 
-$branches = switch ($Branch) {
-    'All'     { @('release','staging') }
-    'Release'    { @('release') }
-    'Staging' { @('staging') }
-}
-$mods = switch ($Mod) {
-    'All'    { @('carbon','oxide') }
-    'Oxide'  { @('oxide') }
-    'Carbon' { @('carbon') }
-}
+foreach ($inst in Resolve-Instances -Mod $Mod -Branch $Branch) {
+    $p = Get-InstancePaths $inst
+    $proc = Get-ServerProcess -Paths $p
+    if (-not $proc) { continue }
 
-$services = @(foreach ($m in $mods) { foreach ($b in $branches) { "$m-$b" } })
-
-Write-Host ("Stopping: " + ($services -join ', ')) -ForegroundColor Yellow
-
-Push-Location (Join-Path $PSScriptRoot 'docker')
-try {
-    docker compose stop $services
-} finally {
-    Pop-Location
+    Write-Host "Stopping $inst (PID $($proc.Id))..." -ForegroundColor Yellow
+    Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+    $proc.WaitForExit(15000) | Out-Null
+    Remove-Item $p.PidFile -ErrorAction SilentlyContinue
+    Write-Host "Stopped $inst." -ForegroundColor Green
 }

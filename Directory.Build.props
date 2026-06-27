@@ -13,7 +13,7 @@
          test-env (the container copies them to servers/<name>/refs on boot). Path is
          relative to THIS props file, so it works whether shared is built standalone or
          imported as a submodule of a plugin repo. -->
-    <RustManagedDir Condition="'$(RustManagedDir)' == ''">$(MSBuildThisFileDirectory)test-env/docker/servers/rust-$(Platform.ToLowerInvariant())-$(Configuration.ToLowerInvariant())/refs</RustManagedDir>
+    <RustManagedDir Condition="'$(RustManagedDir)' == ''">$(MSBuildThisFileDirectory)test-env/servers/rust-$(Platform.ToLowerInvariant())-$(Configuration.ToLowerInvariant())/refs</RustManagedDir>
   </PropertyGroup>
 
   <!-- CARBON is defined for the Carbon platform; Oxide compiles the #else branch. -->
@@ -81,7 +81,11 @@
            Text="[deploy] A listed plugin has no matching .cs under src/. Requested: @(DeployPlugin). Resolved: @(_DeployPluginFile->'%(Filename)'). List plugins by their .cs filename only (no path, no extension)." />
 
     <PropertyGroup>
-      <_PluginsDir>$([MSBuild]::NormalizeDirectory('$(RustManagedDir)', '..', 'plugins'))</_PluginsDir>
+      <!-- Local install layout: RustManagedDir is <instance>/refs, and the mod hot-reloads
+           from <instance>/server/<mod>/plugins (carbon/plugins or oxide/plugins). -->
+      <_ModName Condition="'$(Platform)' == 'Carbon'">carbon</_ModName>
+      <_ModName Condition="'$(Platform)' != 'Carbon'">oxide</_ModName>
+      <_PluginsDir>$([MSBuild]::NormalizeDirectory('$(RustManagedDir)', '..', 'server', '$(_ModName)', 'plugins'))</_PluginsDir>
       <_BundlerProj>$(MSBuildThisFileDirectory)src\HizenLabs.Bundler\HizenLabs.Bundler.csproj</_BundlerProj>
       <_BundlerDll>$(MSBuildThisFileDirectory)src\HizenLabs.Bundler\bin\$(Platform)\$(Configuration)\net10.0\hizenbundle.dll</_BundlerDll>
       <_SharedRuntimeDir>$(MSBuildThisFileDirectory)src\HizenLabs.Shared</_SharedRuntimeDir>

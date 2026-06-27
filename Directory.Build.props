@@ -104,7 +104,7 @@
          each local deploy hot-reloads. A non-zero exit (compile failure, or a missing/empty
          changelog) stops the target before the copy below, so a broken bundle never reaches the
          server. -->
-    <!-- The plugin-folder --shared-dir is passed via GetDirectoryName(plugin file): %(Directory)
+    <!-- The plugin-folder shared-dir flag is passed via GetDirectoryName(plugin file): %(Directory)
          carries a trailing separator, so quoting it as "<dir>\" makes the closing quote read as an
          escaped quote (\") on Windows, swallowing every later flag and failing the bundler with a
          non-obvious exit 2. GetDirectoryName yields the same folder with no trailing separator.

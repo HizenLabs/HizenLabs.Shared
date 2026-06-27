@@ -187,15 +187,32 @@ function Get-CarbonRepoPath {
     throw "Couldn't find the Carbon repo from CarbonLocalBuildPath ('$(Resolve-LocalCarbonPath -Cfg $Cfg)'). Set CarbonRepoPath in Local.config.ps1."
 }
 
-# Builds the Carbon Debug overlay by invoking the repo's build_debug_noarchive.bat.
-# Throws on a non-zero exit so callers can abort BEFORE stopping a running server.
+# Carbon build channel (compile define + release tag) for the debug instance,
+# derived from the Rust channel. These MUST match the branch you build, or Carbon
+# is functionally wrong: the define gates patch/compile behavior (PatchManager,
+# ScriptCompilationThread) and the tag is the channel Carbon reports/updates from.
+# Mirrors Carbon CI's common-build.yml mapping (GIT_BRANCH -> BUILD_DEFINE/TAG_NAME).
+function Get-CarbonBuildChannel {
+    param([Parameter(Mandatory)]$Cfg)
+    switch (Get-CarbonDebugGameBranch -Cfg $Cfg) {
+        'staging' { return [pscustomobject]@{ Define = 'RUST_STAGING'; Tag = 'rustbeta_staging_build' } }
+        default   { return [pscustomobject]@{ Define = 'EDGE';         Tag = 'edge_build' } }   # public -> edge
+    }
+}
+
+# Builds the Carbon Debug overlay via the repo's build.bat with the channel-correct
+# define/tag (NOT build_debug_noarchive.bat, which hardcodes EDGE/edge_build). Throws
+# on a non-zero exit so callers can abort BEFORE stopping a running server. Note: the
+# build compiles against whatever Rust refs are in the repo's rust\ folder, so run the
+# matching refs update first when you switch channel (e.g. tools\build\win\update_staging.bat).
 function Invoke-CarbonDebugBuild {
     param([Parameter(Mandatory)]$Cfg)
     $repo = Get-CarbonRepoPath -Cfg $Cfg
-    $bat  = [System.IO.Path]::Combine($repo, 'tools', 'build', 'win', 'build_debug_noarchive.bat')
+    $bat  = [System.IO.Path]::Combine($repo, 'tools', 'build', 'win', 'build.bat')
     if (-not (Test-Path $bat)) { throw "Build script not found: $bat" }
-    Write-Host "Building Carbon (Debug) in $repo ..." -ForegroundColor Cyan
-    & cmd.exe /c "`"$bat`""
+    $ch = Get-CarbonBuildChannel -Cfg $Cfg
+    Write-Host "Building Carbon (Debug / $($ch.Define) / $($ch.Tag)) in $repo ..." -ForegroundColor Cyan
+    & cmd.exe /c "`"$bat`" Debug $($ch.Define) $($ch.Tag) -noarchive"
     if ($LASTEXITCODE -ne 0) { throw "Carbon build failed (exit $LASTEXITCODE) -- not touching the running server." }
 }
 

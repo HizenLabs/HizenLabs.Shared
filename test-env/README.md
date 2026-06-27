@@ -59,17 +59,22 @@ soft-debugger enabled, so you can attach Visual Studio and step through Carbon
 (not just plugins). Carbon is injected into `RustDedicated` via UnityDoorstop, so
 this is **attach** debugging — there is no "run Carbon" target.
 
-> **Match the Rust channel.** A Carbon build targets a specific Rust branch, so
-> `CarbonDebugGameBranch` must match your Carbon fork: `rust_beta/staging` -> `staging`
-> (default), `main` -> `public`. A mismatch loads the wrong game assemblies/hooks.
+> **Match the Rust channel.** A Carbon build's compile define/tag and the Rust game
+> branch must match your Carbon fork, or you load wrong assemblies/hooks AND Carbon
+> reports the wrong channel. `CarbonDebugGameBranch` (default `staging`) drives both:
+> `staging` -> Rust `-beta staging` + Carbon `RUST_STAGING`/`rustbeta_staging_build`;
+> `public` -> public Rust + `EDGE`/`edge_build`. Build your Carbon fork ON the matching
+> branch (`rust_beta/staging`). `redeploy.ps1 -Build` applies the right define for you;
+> `build_debug_noarchive.bat` does NOT (it hardcodes EDGE) — don't use it for staging.
 
 ```powershell
-# 1. Build the overlay in the Carbon fork (one-time per change):
-#      tools\build\win\build_debug_noarchive.bat   -> release\.tmp\Debug
-# 2. Point Local.config.ps1 at it (default already assumes hizenlabs\carbon\Carbon):
-#      CarbonLocalBuildPath  = '..\..\..\carbon\Carbon\release\.tmp\Debug'
-#      CarbonDebugGameBranch = 'staging'   # match your Carbon fork's Rust channel
-.\install.ps1 -Branch Debug    # SteamCMD game (matched branch) + local Carbon + debugger
+# First time, in the Carbon fork (on the rust_beta/staging branch):
+#   tools\build\win\bootstrap.bat staging                              # tooling + STAGING refs
+#   tools\build\win\build.bat Debug RUST_STAGING rustbeta_staging_build -noarchive
+# Then point Local.config.ps1 at the output (default already assumes hizenlabs\carbon\Carbon):
+#   CarbonLocalBuildPath  = '..\..\..\carbon\Carbon\release\.tmp\Debug'
+#   CarbonDebugGameBranch = 'staging'
+.\install.ps1 -Branch Debug    # SteamCMD game (staging) + local Carbon + debugger
 .\start.ps1   -Branch Debug    # launches on :28240; prints the attach address
 #   -> in Visual Studio: Debug > Attach Unity Debugger > add 127.0.0.1:55555
 ```
@@ -77,14 +82,16 @@ this is **attach** debugging — there is no "run Carbon" target.
 Inner loop after a Carbon code change — one command:
 
 ```powershell
-.\redeploy.ps1 -Build      # build Carbon -> stop -> deploy -> restart, then re-attach VS
+.\redeploy.ps1 -Build      # build Carbon (channel-correct) -> stop -> deploy -> restart, re-attach VS
 ```
 
 `-Build` finds the Carbon repo (via `CarbonLocalBuildPath`, or `CarbonRepoPath`) and
-runs its `build_debug_noarchive.bat` for you — building *before* stopping the server,
-so a failed build never kills a working instance. Without `-Build` it redeploys an
-already-built overlay (`-Restart` to bounce it). Set `CarbonDebugSuspend = $true` to
-freeze boot until you attach (for early-init bugs).
+runs `build.bat Debug <define> <tag> -noarchive` with the define/tag for your channel
+(staging -> `RUST_STAGING`/`rustbeta_staging_build`) — building *before* stopping the
+server, so a failed build never kills a working instance. It compiles against the refs
+in the repo's `rust\` folder, so re-run `tools\build\win\update_staging.bat` once when
+you switch channel. Without `-Build` it redeploys an already-built overlay (`-Restart`
+to bounce it). `CarbonDebugSuspend = $true` freezes boot until you attach.
 
 **Server log.** `carbon-debug` routes output to `logs\server.log` (RustDedicated's
 live console otherwise throws a cosmetic `SetConsoleCursorInfo failed`). Tail it:

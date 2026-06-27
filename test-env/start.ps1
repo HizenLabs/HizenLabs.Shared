@@ -70,23 +70,20 @@ foreach ($inst in Resolve-Instances -Mod $Mod -Branch $Branch) {
 
     $serverArgs = $argList -join ' '
 
-    $logTail = $null
-    if ($p.Branch -eq 'debug' -and (Get-CarbonDebugUseLogFile -Cfg $cfg)) {
-        # carbon-debug (default): launch HEADLESS with stdout/stderr redirected to a
-        # file. Redirected output makes Rust's ServerConsole non-interactive, so it
-        # never drives the console cursor -> no cosmetic 'SetConsoleCursorInfo failed'.
-        # Read the live log by tailing the file; send commands via RCON / the web panel.
-        New-Item -ItemType Directory -Force -Path $p.LogDir | Out-Null
-        $logTail = Join-Path $p.LogDir 'server.log'
-        $errLog  = Join-Path $p.LogDir 'server.err.log'
-        Start-Process -FilePath $p.Exe -ArgumentList $serverArgs -WorkingDirectory $p.Server `
-            -WindowStyle Hidden -RedirectStandardOutput $logTail -RedirectStandardError $errLog | Out-Null
+    if ($p.Branch -eq 'debug') {
+        # Launch RustDedicated DIRECTLY in its own new console window, like a manual run.
+        # The `cmd /c start` double-hop (used below for the other instances) hands the
+        # process a console whose handles Mono's soft-debugger can't drive, so Rust's
+        # ServerConsole cursor call throws 'SetConsoleCursorInfo failed' -- but ONLY when
+        # the debugger is enabled (hence debug-instance-only). A direct launch gives a
+        # clean console, so the live console and the attached debugger coexist fine.
+        Start-Process -FilePath $p.Exe -ArgumentList $serverArgs -WorkingDirectory $p.Server | Out-Null
     }
     else {
         # Launch through `cmd start` so the server gets a REAL new console window (its
         # live, type-able console), even from VS Code / Windows Terminal. The quoted
-        # title stops `start` from treating the quoted exe path as the title. (Other
-        # instances, and CarbonDebugLogFile=$false, use this -- shows the cursor error.)
+        # title stops `start` from treating the quoted exe path as the title. We can't
+        # get the PID from `start`, so find it by identity right after.
         $cmdLine = '/c start "rust-{0}" /D "{1}" "{2}" {3}' -f $inst, $p.Server, $p.Exe, $serverArgs
         Start-Process -FilePath 'cmd.exe' -ArgumentList $cmdLine | Out-Null
     }
@@ -102,10 +99,6 @@ foreach ($inst in Resolve-Instances -Mod $Mod -Branch $Branch) {
             $inst, $proc.ProcessId, $game, $rcon, $owners) -ForegroundColor Green
         if ($p.Branch -eq 'debug') {
             Write-Host ("  Attach a Mono debugger (VS -> Tools for Unity) to {0}" -f (Get-CarbonDebugAddress -Cfg $cfg)) -ForegroundColor Cyan
-            if ($logTail) {
-                Write-Host ("  Live log:  Get-Content -Wait -Tail 100 '{0}'" -f $logTail) -ForegroundColor Cyan
-                Write-Host  "  (headless -- no window; send server commands via RCON :$rcon or the Carbon web panel)" -ForegroundColor DarkGray
-            }
         }
     } else {
         Write-Host ("Launched {0} but couldn't confirm the process -- check its window for a startup error." -f $inst) -ForegroundColor Yellow

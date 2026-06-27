@@ -51,12 +51,4 @@
     # debugger attaches (use it to catch early-init/bootstrap bugs).
     CarbonDebugAddress = '127.0.0.1:55555'
     CarbonDebugSuspend = $false
-
-    # carbon-debug routes server output to logs\server.log instead of the live
-    # console -- this avoids Rust's cosmetic 'SetConsoleCursorInfo failed' and gives
-    # a scrollable, copy-pasteable log. Tail it with:
-    #   Get-Content -Wait -Tail 100 servers\rust-carbon-debug\server\logs\server.log
-    # In logfile mode, send server commands via RCON (:28241) or the Carbon web panel.
-    # Set $false to keep the interactive in-window console (with that cosmetic error).
-    CarbonDebugLogFile = $true
 }

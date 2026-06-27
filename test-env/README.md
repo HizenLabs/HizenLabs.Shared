@@ -90,12 +90,11 @@ against the Rust refs in the repo's `rust\` folder, so run `tools\build\win\upda
 once if your refs aren't staging yet. Without `-Build` it redeploys an already-built
 overlay (`-Restart` to bounce it). `CarbonDebugSuspend = $true` freezes boot until you attach.
 
-**Server log.** `carbon-debug` launches **headless** (no window) with output redirected
-to `logs\server.log` — redirected output keeps RustDedicated's console non-interactive,
-avoiding its cosmetic `SetConsoleCursorInfo failed` error. Tail it:
-`Get-Content -Wait -Tail 100 servers\rust-carbon-debug\server\logs\server.log` — and
-send server commands via RCON (`:28241`) or the Carbon web panel. To keep the
-interactive in-window console instead, set `CarbonDebugLogFile = $false`.
+**Console.** `carbon-debug` launches the server **directly in its own console window**
+(like a manual run), not via the `cmd /c start` wrapper the other instances use. With
+the Mono debugger enabled, that wrapper hands RustDedicated a console its `ServerConsole`
+can't drive (`SetConsoleCursorInfo failed`); a direct launch avoids it, so you keep a
+normal, type-able server console *and* the attached debugger.
 
 ## Config
 

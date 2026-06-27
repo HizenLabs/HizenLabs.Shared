@@ -68,24 +68,28 @@ foreach ($inst in Resolve-Instances -Mod $Mod -Branch $Branch) {
         '+app.port', $app
     )
 
-    # carbon-debug: route output to a logfile instead of the interactive console.
-    # Rust's live-cursor console throws a cosmetic 'SetConsoleCursorInfo failed';
-    # -logfile sidesteps it and gives a tailable, copy-pasteable server log.
-    $logTail = $null
-    if ($p.Branch -eq 'debug' -and (Get-CarbonDebugUseLogFile -Cfg $cfg)) {
-        New-Item -ItemType Directory -Force -Path $p.LogDir | Out-Null
-        $logTail = Join-Path $p.LogDir 'server.log'
-        $argList += @('-logfile', (q $logTail))
-    }
     $serverArgs = $argList -join ' '
 
-    # Launch through `cmd start` so each server gets a REAL new console window (its
-    # live, type-able console), even when this script runs inside VS Code / Windows
-    # Terminal -- a bare Start-Process there just attaches the child to this shell.
-    # The explicit quoted title stops `start` from treating the quoted exe path as
-    # the title. We can't get the PID from `start`, so find it by identity right after.
-    $cmdLine = '/c start "rust-{0}" /D "{1}" "{2}" {3}' -f $inst, $p.Server, $p.Exe, $serverArgs
-    Start-Process -FilePath 'cmd.exe' -ArgumentList $cmdLine | Out-Null
+    $logTail = $null
+    if ($p.Branch -eq 'debug' -and (Get-CarbonDebugUseLogFile -Cfg $cfg)) {
+        # carbon-debug (default): launch HEADLESS with stdout/stderr redirected to a
+        # file. Redirected output makes Rust's ServerConsole non-interactive, so it
+        # never drives the console cursor -> no cosmetic 'SetConsoleCursorInfo failed'.
+        # Read the live log by tailing the file; send commands via RCON / the web panel.
+        New-Item -ItemType Directory -Force -Path $p.LogDir | Out-Null
+        $logTail = Join-Path $p.LogDir 'server.log'
+        $errLog  = Join-Path $p.LogDir 'server.err.log'
+        Start-Process -FilePath $p.Exe -ArgumentList $serverArgs -WorkingDirectory $p.Server `
+            -WindowStyle Hidden -RedirectStandardOutput $logTail -RedirectStandardError $errLog | Out-Null
+    }
+    else {
+        # Launch through `cmd start` so the server gets a REAL new console window (its
+        # live, type-able console), even from VS Code / Windows Terminal. The quoted
+        # title stops `start` from treating the quoted exe path as the title. (Other
+        # instances, and CarbonDebugLogFile=$false, use this -- shows the cursor error.)
+        $cmdLine = '/c start "rust-{0}" /D "{1}" "{2}" {3}' -f $inst, $p.Server, $p.Exe, $serverArgs
+        Start-Process -FilePath 'cmd.exe' -ArgumentList $cmdLine | Out-Null
+    }
 
     $proc = $null
     for ($i = 0; $i -lt 20 -and -not $proc; $i++) {
@@ -100,7 +104,7 @@ foreach ($inst in Resolve-Instances -Mod $Mod -Branch $Branch) {
             Write-Host ("  Attach a Mono debugger (VS -> Tools for Unity) to {0}" -f (Get-CarbonDebugAddress -Cfg $cfg)) -ForegroundColor Cyan
             if ($logTail) {
                 Write-Host ("  Live log:  Get-Content -Wait -Tail 100 '{0}'" -f $logTail) -ForegroundColor Cyan
-                Write-Host  "  (logfile mode -- send server commands via RCON :$rcon or the Carbon web panel)" -ForegroundColor DarkGray
+                Write-Host  "  (headless -- no window; send server commands via RCON :$rcon or the Carbon web panel)" -ForegroundColor DarkGray
             }
         }
     } else {

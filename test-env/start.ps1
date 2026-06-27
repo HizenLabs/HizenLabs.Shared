@@ -71,13 +71,15 @@ foreach ($inst in Resolve-Instances -Mod $Mod -Branch $Branch) {
     $serverArgs = $argList -join ' '
 
     if ($p.Branch -eq 'debug') {
-        # Launch RustDedicated DIRECTLY in its own new console window, like a manual run.
-        # The `cmd /c start` double-hop (used below for the other instances) hands the
-        # process a console whose handles Mono's soft-debugger can't drive, so Rust's
-        # ServerConsole cursor call throws 'SetConsoleCursorInfo failed' -- but ONLY when
-        # the debugger is enabled (hence debug-instance-only). A direct launch gives a
-        # clean console, so the live console and the attached debugger coexist fine.
-        Start-Process -FilePath $p.Exe -ArgumentList $serverArgs -WorkingDirectory $p.Server | Out-Null
+        # Open its OWN console window (via cmd, so it's a separate window even from VS
+        # Code / Windows Terminal), but run the exe as a DIRECT child of cmd (`cmd /c
+        # "<exe>"`, NOT `cmd /c start`). The exe then shares cmd's normal console -- a
+        # clean console the Mono debugger can drive. `cmd /c start` instead detaches the
+        # exe into a fresh console whose handles the debugger chokes on (Rust's
+        # ServerConsole -> 'SetConsoleCursorInfo failed'); a bare Start-Process <exe> has
+        # no window of its own here. This gives a real server console AND a live debugger.
+        $cmdLine = '/c "{0}" {1}' -f $p.Exe, $serverArgs
+        Start-Process -FilePath 'cmd.exe' -ArgumentList $cmdLine -WorkingDirectory $p.Server | Out-Null
     }
     else {
         # Launch through `cmd start` so the server gets a REAL new console window (its

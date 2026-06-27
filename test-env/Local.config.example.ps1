@@ -31,26 +31,20 @@
     CarbonReleaseChannel = 'Production'
 
     # --- Debug instance (carbon-debug, -Branch Debug) ----------------------
-    # Runs a LOCAL Carbon build with the Mono debugger on, so you can attach
-    # Visual Studio and step Carbon itself. Build the overlay in the Carbon repo
-    # (tools\build\win\build_debug_noarchive.bat -> release\.tmp\Debug), then:
+    # Always the Rust STAGING channel: it runs a LOCAL Carbon staging build with the
+    # Mono debugger on, so you can attach Visual Studio and step Carbon itself. Build
+    # your Carbon fork ON the rust_beta/staging branch, then:
     #   .\install.ps1 -Branch Debug   ->   .\start.ps1 -Branch Debug   -> attach
-    #   .\redeploy.ps1 -Restart       # fast loop after each rebuild
+    #   .\redeploy.ps1 -Build         # build (RUST_STAGING) + deploy + restart, each iteration
     #
-    # Path to that overlay. Relative paths resolve from this test-env folder; the
-    # default assumes the Carbon fork sits beside the plugins repo under hizenlabs\.
+    # Path to the build overlay (release\.tmp\Debug). Relative paths resolve from this
+    # test-env folder; the default assumes the Carbon fork sits beside the plugins repo.
     CarbonLocalBuildPath = '..\..\..\carbon\Carbon\release\.tmp\Debug'
 
     # Optional: Carbon repo root, used by `redeploy.ps1 -Build` to run the build.
-    # Leave unset to auto-derive it from CarbonLocalBuildPath (walks up to the
-    # folder containing tools\build\win\build_debug_noarchive.bat).
+    # Leave unset to auto-derive it from CarbonLocalBuildPath (walks up to the folder
+    # containing tools\build\win\build.bat).
     # CarbonRepoPath = '..\..\..\carbon\Carbon'
-
-    # Rust game branch carbon-debug installs -- MUST match the Rust channel your
-    # local Carbon build targets, or the game assemblies/hooks won't line up:
-    #   Carbon fork on rust_beta/staging -> 'staging'    (default)
-    #   Carbon fork on main              -> 'public'
-    CarbonDebugGameBranch = 'staging'
 
     # Mono soft-debugger endpoint baked into carbon-debug's doorstop_config.ini --
     # attach Visual Studio (Tools for Unity) here. Suspend freezes boot until a

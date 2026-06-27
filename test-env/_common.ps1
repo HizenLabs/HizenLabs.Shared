@@ -149,14 +149,12 @@ function Get-CarbonDebugAddress {
     return '127.0.0.1:55555'
 }
 
-# Rust game branch the carbon-debug server installs -- MUST match the Rust channel
-# your local Carbon build targets (rust_beta/staging -> 'staging'; main -> 'public'),
-# or the game assemblies/hooks won't match. 'public' | 'staging'. Default 'staging'.
-function Get-CarbonDebugGameBranch {
-    param([Parameter(Mandatory)]$Cfg)
-    if ($Cfg.CarbonDebugGameBranch) { return $Cfg.CarbonDebugGameBranch.ToLowerInvariant() }
-    return 'staging'
-}
+# carbon-debug is ALWAYS the Rust staging channel -- it exists to debug local Carbon
+# staging builds. One source of truth for install.ps1 (game beta) and the build: the
+# Steam beta branch + the Carbon compile define / release tag CI uses for rust_beta/staging.
+$script:CarbonDebugGameBeta = 'staging'
+$script:CarbonDebugDefine   = 'RUST_STAGING'
+$script:CarbonDebugTag      = 'rustbeta_staging_build'
 
 # Whether carbon-debug routes server output to logs\server.log instead of the
 # interactive console. Avoids Rust's cosmetic 'SetConsoleCursorInfo failed' and
@@ -179,7 +177,7 @@ function Get-CarbonRepoPath {
     }
     $dir = Resolve-LocalCarbonPath -Cfg $Cfg
     while ($dir) {
-        if (Test-Path ([System.IO.Path]::Combine($dir, 'tools', 'build', 'win', 'build_debug_noarchive.bat'))) { return $dir }
+        if (Test-Path ([System.IO.Path]::Combine($dir, 'tools', 'build', 'win', 'build.bat'))) { return $dir }
         $parent = Split-Path $dir -Parent
         if (-not $parent -or $parent -eq $dir) { break }
         $dir = $parent
@@ -187,32 +185,19 @@ function Get-CarbonRepoPath {
     throw "Couldn't find the Carbon repo from CarbonLocalBuildPath ('$(Resolve-LocalCarbonPath -Cfg $Cfg)'). Set CarbonRepoPath in Local.config.ps1."
 }
 
-# Carbon build channel (compile define + release tag) for the debug instance,
-# derived from the Rust channel. These MUST match the branch you build, or Carbon
-# is functionally wrong: the define gates patch/compile behavior (PatchManager,
-# ScriptCompilationThread) and the tag is the channel Carbon reports/updates from.
-# Mirrors Carbon CI's common-build.yml mapping (GIT_BRANCH -> BUILD_DEFINE/TAG_NAME).
-function Get-CarbonBuildChannel {
-    param([Parameter(Mandatory)]$Cfg)
-    switch (Get-CarbonDebugGameBranch -Cfg $Cfg) {
-        'staging' { return [pscustomobject]@{ Define = 'RUST_STAGING'; Tag = 'rustbeta_staging_build' } }
-        default   { return [pscustomobject]@{ Define = 'EDGE';         Tag = 'edge_build' } }   # public -> edge
-    }
-}
-
-# Builds the Carbon Debug overlay via the repo's build.bat with the channel-correct
-# define/tag (NOT build_debug_noarchive.bat, which hardcodes EDGE/edge_build). Throws
-# on a non-zero exit so callers can abort BEFORE stopping a running server. Note: the
-# build compiles against whatever Rust refs are in the repo's rust\ folder, so run the
-# matching refs update first when you switch channel (e.g. tools\build\win\update_staging.bat).
+# Builds the Carbon Debug overlay via the repo's build.bat with the STAGING define/tag
+# (RUST_STAGING / rustbeta_staging_build). NOT build_debug_noarchive.bat -- that hardcodes
+# EDGE/edge_build, which is wrong for staging (the define gates real patch/compile code).
+# Throws on a non-zero exit so callers can abort BEFORE stopping a running server. The
+# build compiles against the Rust refs in the repo's rust\ folder, so run
+# tools\build\win\update_staging.bat first if your refs aren't staging yet.
 function Invoke-CarbonDebugBuild {
     param([Parameter(Mandatory)]$Cfg)
     $repo = Get-CarbonRepoPath -Cfg $Cfg
     $bat  = [System.IO.Path]::Combine($repo, 'tools', 'build', 'win', 'build.bat')
     if (-not (Test-Path $bat)) { throw "Build script not found: $bat" }
-    $ch = Get-CarbonBuildChannel -Cfg $Cfg
-    Write-Host "Building Carbon (Debug / $($ch.Define) / $($ch.Tag)) in $repo ..." -ForegroundColor Cyan
-    & cmd.exe /c "`"$bat`" Debug $($ch.Define) $($ch.Tag) -noarchive"
+    Write-Host "Building Carbon (Debug / $script:CarbonDebugDefine / $script:CarbonDebugTag) in $repo ..." -ForegroundColor Cyan
+    & cmd.exe /c "`"$bat`" Debug $script:CarbonDebugDefine $script:CarbonDebugTag -noarchive"
     if ($LASTEXITCODE -ne 0) { throw "Carbon build failed (exit $LASTEXITCODE) -- not touching the running server." }
 }
 
@@ -222,7 +207,7 @@ function Deploy-LocalCarbon {
     param([Parameter(Mandatory)]$Paths, [Parameter(Mandatory)]$Cfg)
     $src = Resolve-LocalCarbonPath -Cfg $Cfg
     if (-not (Test-Path (Join-Path $src 'carbon\managed'))) {
-        throw "No Carbon build at '$src' (expected carbon\managed\). Build it in the Carbon repo: tools\build\win\build_debug_noarchive.bat -> release\.tmp\Debug"
+        throw "No Carbon build at '$src' (expected carbon\managed\). Build it: tools\build\win\build.bat Debug RUST_STAGING rustbeta_staging_build -noarchive  (or just .\redeploy.ps1 -Build)"
     }
     Write-Host "Deploying local Carbon: $src" -ForegroundColor DarkGray
     Copy-Item -Path (Join-Path $src '*') -Destination $Paths.Server -Recurse -Force

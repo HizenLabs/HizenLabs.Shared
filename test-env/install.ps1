@@ -70,10 +70,9 @@ foreach ($inst in Resolve-Instances -Mod $Mod -Branch $Branch) {
     New-Item -ItemType Directory -Force -Path $temp | Out-Null
 
     # --- game ---------------------------------------------------------------
-    # staging instances use the Rust staging beta; debug uses whatever channel its
-    # local Carbon build targets (CarbonDebugGameBranch); release uses public.
-    $gameBranch = $p.Branch
-    if ($p.Branch -eq 'debug') { $gameBranch = Get-CarbonDebugGameBranch -Cfg $cfg }
+    # staging instances use the Rust staging beta; debug is always staging too (it's
+    # the debugger/local-build flavor of staging); release uses the public branch.
+    $gameBranch = if ($p.Branch -eq 'debug') { $script:CarbonDebugGameBeta } else { $p.Branch }
     $betaArgs = if ($gameBranch -eq 'staging') { @('-beta', 'staging') } else { @() }
     $validate = if ($Force) { 'validate' } else { '' }
     Write-Host "SteamCMD app_update 258550 ($($p.Branch) -> rust:$gameBranch)..." -ForegroundColor DarkGray

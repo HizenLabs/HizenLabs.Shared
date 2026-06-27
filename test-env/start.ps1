@@ -7,16 +7,17 @@
 #   .\start.ps1 -Mod Carbon                  # both carbon instances
 #   .\start.ps1 -Mod Carbon -Branch Release  # just carbon-release
 #
-# -Branch: All (default) | Staging | Release      (Release = release game branch)
+# -Branch: All (default) | Staging | Release | Debug   (Release = release branch)
 # -Mod:    All (default) | Oxide   | Carbon
 #
 # Connect from the Rust client F1 console:  client.connect 127.0.0.1:<game-port>
 #   carbon-release 28200  oxide-release 28210  carbon-staging 28220  oxide-staging 28230
+#   carbon-debug 28240 (local Carbon build + Mono debugger; -Branch Debug)
 # Not installed yet? Run .\install.ps1 first (or pass -Install here).
 # =============================================================================
 [CmdletBinding()]
 param(
-    [ValidateSet('All', 'Staging', 'Release')][string]$Branch = 'All',
+    [ValidateSet('All', 'Staging', 'Release', 'Debug')][string]$Branch = 'All',
     [ValidateSet('All', 'Oxide', 'Carbon')][string]$Mod = 'All',
     [switch]$Install
 )
@@ -85,6 +86,9 @@ foreach ($inst in Resolve-Instances -Mod $Mod -Branch $Branch) {
         Set-Content -Path $p.PidFile -Value $proc.ProcessId
         Write-Host ("Started {0} (PID {1}) on :{2}  rcon :{3}  owners:{4}" -f `
             $inst, $proc.ProcessId, $game, $rcon, $owners) -ForegroundColor Green
+        if ($p.Branch -eq 'debug') {
+            Write-Host ("  Attach a Mono debugger (VS -> Tools for Unity) to {0}" -f (Get-CarbonDebugAddress -Cfg $cfg)) -ForegroundColor Cyan
+        }
     } else {
         Write-Host ("Launched {0} but couldn't confirm the process -- check its window for a startup error." -f $inst) -ForegroundColor Yellow
     }

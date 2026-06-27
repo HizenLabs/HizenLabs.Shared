@@ -7,16 +7,19 @@
 #   .\install.ps1 -Mod Carbon -Branch Release  # just carbon-release
 #   .\install.ps1 -Mod Oxide -Branch Staging -Force   # force a full re-validate
 #
-# -Branch: All (default) | Staging | Release      (Release = release game branch)
+# -Branch: All (default) | Staging | Release | Debug   (Release = release branch)
 # -Mod:    All (default) | Oxide   | Carbon
 #
 # 'staging' instances use the Rust staging game branch (-beta staging) plus the
 # matching mod staging build; 'release' uses the public branch + production mod.
+# 'Debug' is a carbon-only instance (carbon-debug): public game branch + your
+# LOCAL Carbon build (CarbonLocalBuildPath) with the Mono debugger enabled, for
+# attaching Visual Studio to step Carbon itself. See redeploy.ps1 for the loop.
 # Each instance is a full standalone install under .\servers\rust-<mod>-<branch>\.
 # =============================================================================
 [CmdletBinding()]
 param(
-    [ValidateSet('All', 'Staging', 'Release')][string]$Branch = 'All',
+    [ValidateSet('All', 'Staging', 'Release', 'Debug')][string]$Branch = 'All',
     [ValidateSet('All', 'Oxide', 'Carbon')][string]$Mod = 'All',
     [switch]$Force
 )
@@ -77,17 +80,25 @@ foreach ($inst in Resolve-Instances -Mod $Mod -Branch $Branch) {
     if (-not (Test-Path $p.Exe)) { throw "RustDedicated.exe missing after install for $inst." }
 
     # --- mod ----------------------------------------------------------------
-    if ($p.Mod -eq 'carbon') {
-        $url = Get-CarbonUrl -BranchKey $p.Branch
-    } else {
-        $url = Get-OxideUrl -BranchKey $p.Branch
+    if ($p.Branch -eq 'debug') {
+        # Debug instance: deploy the locally-built Carbon overlay instead of a
+        # downloaded release, and switch on the Mono soft-debugger for VS attach.
+        Deploy-LocalCarbon -Paths $p -Cfg $cfg
+        Set-DoorstopMonoDebug -Paths $p -Address (Get-CarbonDebugAddress -Cfg $cfg) -Suspend ([bool]$cfg.CarbonDebugSuspend)
     }
-    $archive = Join-Path $temp ([System.IO.Path]::GetFileName(($url -split '\?')[0]))
-    if ([string]::IsNullOrWhiteSpace([System.IO.Path]::GetExtension($archive))) { $archive = "$archive.zip" }
-    Write-Host "Installing $($p.Mod) ($($p.Branch)): $url" -ForegroundColor DarkGray
-    Invoke-WebRequest $url -OutFile $archive
-    Expand-Archive -Path $archive -DestinationPath $p.Server -Force   # overlays onto the install
-    Remove-Item $archive -Force
+    else {
+        if ($p.Mod -eq 'carbon') {
+            $url = Get-CarbonUrl -BranchKey $p.Branch
+        } else {
+            $url = Get-OxideUrl -BranchKey $p.Branch
+        }
+        $archive = Join-Path $temp ([System.IO.Path]::GetFileName(($url -split '\?')[0]))
+        if ([string]::IsNullOrWhiteSpace([System.IO.Path]::GetExtension($archive))) { $archive = "$archive.zip" }
+        Write-Host "Installing $($p.Mod) ($($p.Branch)): $url" -ForegroundColor DarkGray
+        Invoke-WebRequest $url -OutFile $archive
+        Expand-Archive -Path $archive -DestinationPath $p.Server -Force   # overlays onto the install
+        Remove-Item $archive -Force
+    }
 
     # --- refs: single folder the plugin build references (RustManagedDir) ----
     # Game Managed/*.dll, plus Carbon's managed set (Carbon.* API) so carbon

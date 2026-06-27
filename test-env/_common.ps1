@@ -12,22 +12,28 @@ $script:Mods     = @('carbon', 'oxide')
 $script:Branches = @('release', 'staging')
 
 # game=BASE/udp  rcon=BASE+1/tcp  query=BASE+2/udp  app=BASE+3/tcp  (matches docker)
+# carbon-debug is an opt-in extra instance (see Resolve-Instances) running a LOCAL
+# Carbon build with the Mono debugger on; it sits past the matrix at 28240.
 $script:PortBase = @{
     'carbon-release' = 28200
     'oxide-release'  = 28210
     'carbon-staging' = 28220
     'oxide-staging'  = 28230
+    'carbon-debug'   = 28240
 }
 
 function Get-TestEnvRoot { $PSScriptRoot }
 
-# -Mod/-Branch (All|Carbon|Oxide / All|Release|Staging) -> instance keys like
+# -Mod/-Branch (All|Carbon|Oxide / All|Release|Staging|Debug) -> instance keys like
 # 'carbon-release'. Same expansion start.ps1/stop.ps1 used under docker.
+# 'Debug' is the special carbon-only local-build instance (carbon-debug); it is
+# opt-in and deliberately NOT part of 'All' so a bare start/install never touches it.
 function Resolve-Instances {
     param(
         [ValidateSet('All', 'Oxide', 'Carbon')][string]$Mod = 'All',
-        [ValidateSet('All', 'Staging', 'Release')][string]$Branch = 'All'
+        [ValidateSet('All', 'Staging', 'Release', 'Debug')][string]$Branch = 'All'
     )
+    if ($Branch -eq 'Debug') { return @('carbon-debug') }
     $mods = if ($Mod -eq 'All') { $script:Mods } else { @($Mod.ToLowerInvariant()) }
     $brs  = if ($Branch -eq 'All') { $script:Branches } else { @($Branch.ToLowerInvariant()) }
     @(foreach ($m in $mods) { foreach ($b in $brs) { "$m-$b" } })
@@ -117,4 +123,59 @@ function Set-ServerUsers {
     foreach ($m in @($Cfg.Moderators)) { if ($m) { $lines += "moderatorid $m `"mod`" `"local`"" } }
     Set-Content -Path (Join-Path $cfgDir 'users.cfg') -Value $lines -Encoding ASCII
     return $lines.Count
+}
+
+# --- Debug instance (local Carbon build) helpers -----------------------------
+
+# Resolves the local Carbon overlay path (the 'noarchive' Debug output, e.g.
+# Carbon\release\.tmp\Debug) from config. Relative paths resolve from test-env.
+function Resolve-LocalCarbonPath {
+    param([Parameter(Mandatory)]$Cfg)
+    $path = $Cfg.CarbonLocalBuildPath
+    if ([string]::IsNullOrWhiteSpace($path)) {
+        throw "CarbonLocalBuildPath is not set in Local.config.ps1 -- it's required for the Debug instance. Run .\config.ps1 and add it."
+    }
+    if (-not [System.IO.Path]::IsPathRooted($path)) {
+        $path = Join-Path (Get-TestEnvRoot) $path
+    }
+    return [System.IO.Path]::GetFullPath($path)
+}
+
+# Returns the configured Mono debugger endpoint (ip:port), defaulting to
+# 127.0.0.1:55555 when Local.config.ps1 doesn't set CarbonDebugAddress.
+function Get-CarbonDebugAddress {
+    param([Parameter(Mandatory)]$Cfg)
+    if ($Cfg.CarbonDebugAddress) { return $Cfg.CarbonDebugAddress }
+    return '127.0.0.1:55555'
+}
+
+# Copies a locally-built Carbon overlay (winhttp.dll + doorstop_config.ini + carbon\)
+# over the instance's server install -- the same overlay the downloaded zip applies.
+function Deploy-LocalCarbon {
+    param([Parameter(Mandatory)]$Paths, [Parameter(Mandatory)]$Cfg)
+    $src = Resolve-LocalCarbonPath -Cfg $Cfg
+    if (-not (Test-Path (Join-Path $src 'carbon\managed'))) {
+        throw "No Carbon build at '$src' (expected carbon\managed\). Build it in the Carbon repo: tools\build\win\build_debug_noarchive.bat -> release\.tmp\Debug"
+    }
+    Write-Host "Deploying local Carbon: $src" -ForegroundColor DarkGray
+    Copy-Item -Path (Join-Path $src '*') -Destination $Paths.Server -Recurse -Force
+}
+
+# Turns on the Unity/Mono soft-debugger in the instance's doorstop_config.ini so
+# Visual Studio (Tools for Unity) can attach. Idempotent -- rewrites [UnityMono] keys.
+function Set-DoorstopMonoDebug {
+    param(
+        [Parameter(Mandatory)]$Paths,
+        [string]$Address = '127.0.0.1:55555',
+        [bool]$Suspend = $false
+    )
+    $ini = Join-Path $Paths.Server 'doorstop_config.ini'
+    if (-not (Test-Path $ini)) { throw "doorstop_config.ini missing at $ini -- is this a Carbon (doorstop) install?" }
+    $suspendVal = if ($Suspend) { 'true' } else { 'false' }
+    $text = Get-Content $ini -Raw
+    $text = [regex]::Replace($text, '(?im)^(\s*debug_enabled\s*=\s*).*$', '${1}true')
+    $text = [regex]::Replace($text, '(?im)^(\s*debug_suspend\s*=\s*).*$', ('${1}' + $suspendVal))
+    $text = [regex]::Replace($text, '(?im)^(\s*debug_address\s*=\s*).*$', ('${1}' + $Address))
+    Set-Content -Path $ini -Value $text -Encoding ASCII
+    Write-Host "Mono debugger enabled on $Address (suspend=$suspendVal)." -ForegroundColor DarkGray
 }

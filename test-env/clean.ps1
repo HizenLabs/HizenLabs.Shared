@@ -13,7 +13,7 @@
 # =============================================================================
 [CmdletBinding()]
 param(
-    [ValidateSet('All', 'Staging', 'Release')][string]$Branch = 'All',
+    [ValidateSet('All', 'Staging', 'Release', 'Debug')][string]$Branch = 'All',
     [ValidateSet('All', 'Oxide', 'Carbon')][string]$Mod = 'All',
     [switch]$KeepPlugins
 )

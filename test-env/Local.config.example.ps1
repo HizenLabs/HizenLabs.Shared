@@ -29,4 +29,21 @@
     # ('staging' branch always uses Carbon's rustbeta_staging_build to match the
     # staging game build -- this setting does not affect it.)
     CarbonReleaseChannel = 'Production'
+
+    # --- Debug instance (carbon-debug, -Branch Debug) ----------------------
+    # Runs a LOCAL Carbon build with the Mono debugger on, so you can attach
+    # Visual Studio and step Carbon itself. Build the overlay in the Carbon repo
+    # (tools\build\win\build_debug_noarchive.bat -> release\.tmp\Debug), then:
+    #   .\install.ps1 -Branch Debug   ->   .\start.ps1 -Branch Debug   -> attach
+    #   .\redeploy.ps1 -Restart       # fast loop after each rebuild
+    #
+    # Path to that overlay. Relative paths resolve from this test-env folder; the
+    # default assumes the Carbon fork sits beside the plugins repo under hizenlabs\.
+    CarbonLocalBuildPath = '..\..\..\carbon\Carbon\release\.tmp\Debug'
+
+    # Mono soft-debugger endpoint baked into carbon-debug's doorstop_config.ini --
+    # attach Visual Studio (Tools for Unity) here. Suspend freezes boot until a
+    # debugger attaches (use it to catch early-init/bootstrap bugs).
+    CarbonDebugAddress = '127.0.0.1:55555'
+    CarbonDebugSuspend = $false
 }

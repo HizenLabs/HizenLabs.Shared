@@ -30,6 +30,12 @@ Connect from the Rust client F1 console: `client.connect 127.0.0.1:<game-port>`
 | oxide-release  | 28210 | 28211 | 28212 | 28213 |
 | carbon-staging | 28220 | 28221 | 28222 | 28223 |
 | oxide-staging  | 28230 | 28231 | 28232 | 28233 |
+| carbon-debug   | 28240 | 28241 | 28242 | 28243 |
+
+`carbon-debug` is an **opt-in** extra instance (`-Branch Debug`) that runs your
+**local Carbon build** with the Mono debugger on — see "Debug Carbon itself" below.
+It is deliberately excluded from `All`, so a bare `start.ps1`/`install.ps1` never
+touches it.
 
 ## Scripts
 
@@ -41,16 +47,40 @@ Connect from the Rust client F1 console: `client.connect 127.0.0.1:<game-port>`
 | `stop.ps1`    | Stop selected instances (by tracked PID). |
 | `wipe.ps1`    | Fresh **world**: delete save/map/identity; keeps install + plugins. `-Reinstall` re-pulls game+mod. |
 | `clean.ps1`   | Dev **refresh**: remove deployed plugins + their configs/data/lang; keeps the world. `-KeepPlugins` to spare plugins. |
+| `redeploy.ps1`| **Debug loop**: copy your freshly-built local Carbon onto `carbon-debug` (keeps the Mono debugger on). `-Restart` to bounce it. |
 
 The **server console** is just the window `start.ps1` opens -- type commands there.
 Closing it (or `stop.ps1`) stops that server; for a clean save type `quit` first.
+
+## Debug Carbon itself
+
+`carbon-debug` runs a Carbon build **you compiled locally**, with the Unity/Mono
+soft-debugger enabled, so you can attach Visual Studio and step through Carbon
+(not just plugins). Carbon is injected into `RustDedicated` via UnityDoorstop, so
+this is **attach** debugging — there is no "run Carbon" target.
+
+```powershell
+# 1. Build the overlay in the Carbon fork (one-time per change):
+#      tools\build\win\build_debug_noarchive.bat   -> release\.tmp\Debug
+# 2. Point Local.config.ps1 at it (default already assumes hizenlabs\carbon\Carbon):
+#      CarbonLocalBuildPath = '..\..\..\carbon\Carbon\release\.tmp\Debug'
+.\install.ps1 -Branch Debug    # SteamCMD game + deploy local Carbon + enable debugger
+.\start.ps1   -Branch Debug    # launches on :28240; prints the attach address
+#   -> in Visual Studio: Debug > Attach Unity Debugger > add 127.0.0.1:55555
+```
+
+Inner loop after each Carbon rebuild: `.\redeploy.ps1 -Restart` (stops, recopies the
+build — DLLs are locked while running — re-enables the debugger, restarts). Set
+`CarbonDebugSuspend = $true` to freeze boot until you attach (for early-init bugs).
 
 ## Config
 
 `Local.config.ps1` (git-ignored, created from `Local.config.example.ps1`) holds
 your `Owners`/`Moderators` SteamID64s, rcon password and world defaults (size,
 seed, max players, level, tickrate) plus the Carbon release channel. Owners are
-written to each server's `users.cfg` on every `start.ps1`.
+written to each server's `users.cfg` on every `start.ps1`. For `carbon-debug` it
+also holds `CarbonLocalBuildPath` (where your local Carbon build is) and
+`CarbonDebugAddress` / `CarbonDebugSuspend` (the Mono debugger endpoint).
 
 ## How the plugin build ties in
 

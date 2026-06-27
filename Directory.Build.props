@@ -104,7 +104,19 @@
          each local deploy hot-reloads. A non-zero exit (compile failure, or a missing/empty
          changelog) stops the target before the copy below, so a broken bundle never reaches the
          server. -->
-    <Exec Command="dotnet exec &quot;$(_BundlerDll)&quot; bundle --plugin &quot;%(_DeployPluginFile.FullPath)&quot; --shared-dir &quot;$(_SharedRuntimeDir)&quot; --shared-dir &quot;%(_DeployPluginFile.RootDir)%(_DeployPluginFile.Directory)&quot; --changelog &quot;%(_DeployPluginFile.RootDir)%(_DeployPluginFile.Directory)CHANGELOG.md&quot; --dev --out &quot;$(_BundleStageDir)\%(_DeployPluginFile.Filename).cs&quot; $(_RefsFlag) &quot;$(RustManagedDir)&quot;" />
+    <!-- The plugin-folder --shared-dir is passed via GetDirectoryName(plugin file): %(Directory)
+         carries a trailing separator, so quoting it as "<dir>\" makes the closing quote read as an
+         escaped quote (\") on Windows, swallowing every later flag and failing the bundler with a
+         non-obvious exit 2. GetDirectoryName yields the same folder with no trailing separator.
+         stderr is folded into stdout (2>&1) and captured so a failure surfaces the bundler's own
+         diagnostics as a build Error instead of a bare "exited with code 2". -->
+    <Exec Command="dotnet exec &quot;$(_BundlerDll)&quot; bundle --plugin &quot;%(_DeployPluginFile.FullPath)&quot; --shared-dir &quot;$(_SharedRuntimeDir)&quot; --shared-dir &quot;$([System.IO.Path]::GetDirectoryName('%(_DeployPluginFile.FullPath)'))&quot; --changelog &quot;%(_DeployPluginFile.RootDir)%(_DeployPluginFile.Directory)CHANGELOG.md&quot; --dev --out &quot;$(_BundleStageDir)\%(_DeployPluginFile.Filename).cs&quot; $(_RefsFlag) &quot;$(RustManagedDir)&quot; 2&gt;&amp;1"
+          ConsoleToMSBuild="true" IgnoreExitCode="true">
+      <Output TaskParameter="ConsoleOutput" ItemName="_BundleLog" />
+      <Output TaskParameter="ExitCode" PropertyName="_BundleExit" />
+    </Exec>
+    <Error Condition="'$(_BundleExit)' != '0'"
+           Text="[deploy] bundler failed (exit $(_BundleExit)):%0A@(_BundleLog, '%0A')" />
 
     <!-- Reached only if every plugin compiled. Ship the bundled artifacts. -->
     <ItemGroup>

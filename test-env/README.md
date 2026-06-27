@@ -47,7 +47,7 @@ touches it.
 | `stop.ps1`    | Stop selected instances (by tracked PID). |
 | `wipe.ps1`    | Fresh **world**: delete save/map/identity; keeps install + plugins. `-Reinstall` re-pulls game+mod. |
 | `clean.ps1`   | Dev **refresh**: remove deployed plugins + their configs/data/lang; keeps the world. `-KeepPlugins` to spare plugins. |
-| `redeploy.ps1`| **Debug loop**: copy your freshly-built local Carbon onto `carbon-debug` (keeps the Mono debugger on). `-Restart` to bounce it. |
+| `redeploy.ps1`| **Debug loop**: `-Build` builds Carbon then stop/deploy/restart `carbon-debug` (one command); bare/`-Restart` redeploys an already-built overlay. Keeps the Mono debugger on. |
 
 The **server console** is just the window `start.ps1` opens -- type commands there.
 Closing it (or `stop.ps1`) stops that server; for a clean save type `quit` first.
@@ -74,9 +74,17 @@ this is **attach** debugging — there is no "run Carbon" target.
 #   -> in Visual Studio: Debug > Attach Unity Debugger > add 127.0.0.1:55555
 ```
 
-Inner loop after each Carbon rebuild: `.\redeploy.ps1 -Restart` (stops, recopies the
-build — DLLs are locked while running — re-enables the debugger, restarts). Set
-`CarbonDebugSuspend = $true` to freeze boot until you attach (for early-init bugs).
+Inner loop after a Carbon code change — one command:
+
+```powershell
+.\redeploy.ps1 -Build      # build Carbon -> stop -> deploy -> restart, then re-attach VS
+```
+
+`-Build` finds the Carbon repo (via `CarbonLocalBuildPath`, or `CarbonRepoPath`) and
+runs its `build_debug_noarchive.bat` for you — building *before* stopping the server,
+so a failed build never kills a working instance. Without `-Build` it redeploys an
+already-built overlay (`-Restart` to bounce it). Set `CarbonDebugSuspend = $true` to
+freeze boot until you attach (for early-init bugs).
 
 ## Config
 

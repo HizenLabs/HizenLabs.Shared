@@ -41,6 +41,11 @@
     # default assumes the Carbon fork sits beside the plugins repo under hizenlabs\.
     CarbonLocalBuildPath = '..\..\..\carbon\Carbon\release\.tmp\Debug'
 
+    # Optional: Carbon repo root, used by `redeploy.ps1 -Build` to run the build.
+    # Leave unset to auto-derive it from CarbonLocalBuildPath (walks up to the
+    # folder containing tools\build\win\build_debug_noarchive.bat).
+    # CarbonRepoPath = '..\..\..\carbon\Carbon'
+
     # Rust game branch carbon-debug installs -- MUST match the Rust channel your
     # local Carbon build targets, or the game assemblies/hooks won't line up:
     #   Carbon fork on rust_beta/staging -> 'staging'    (default)

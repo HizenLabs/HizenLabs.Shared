@@ -158,6 +158,37 @@ function Get-CarbonDebugGameBranch {
     return 'staging'
 }
 
+# Locates the Carbon repo root: explicit CarbonRepoPath if set, else derived by
+# walking up from CarbonLocalBuildPath to the folder holding the build script.
+function Get-CarbonRepoPath {
+    param([Parameter(Mandatory)]$Cfg)
+    if ($Cfg.CarbonRepoPath) {
+        $p = $Cfg.CarbonRepoPath
+        if (-not [System.IO.Path]::IsPathRooted($p)) { $p = Join-Path (Get-TestEnvRoot) $p }
+        return [System.IO.Path]::GetFullPath($p)
+    }
+    $dir = Resolve-LocalCarbonPath -Cfg $Cfg
+    while ($dir) {
+        if (Test-Path ([System.IO.Path]::Combine($dir, 'tools', 'build', 'win', 'build_debug_noarchive.bat'))) { return $dir }
+        $parent = Split-Path $dir -Parent
+        if (-not $parent -or $parent -eq $dir) { break }
+        $dir = $parent
+    }
+    throw "Couldn't find the Carbon repo from CarbonLocalBuildPath ('$(Resolve-LocalCarbonPath -Cfg $Cfg)'). Set CarbonRepoPath in Local.config.ps1."
+}
+
+# Builds the Carbon Debug overlay by invoking the repo's build_debug_noarchive.bat.
+# Throws on a non-zero exit so callers can abort BEFORE stopping a running server.
+function Invoke-CarbonDebugBuild {
+    param([Parameter(Mandatory)]$Cfg)
+    $repo = Get-CarbonRepoPath -Cfg $Cfg
+    $bat  = [System.IO.Path]::Combine($repo, 'tools', 'build', 'win', 'build_debug_noarchive.bat')
+    if (-not (Test-Path $bat)) { throw "Build script not found: $bat" }
+    Write-Host "Building Carbon (Debug) in $repo ..." -ForegroundColor Cyan
+    & cmd.exe /c "`"$bat`""
+    if ($LASTEXITCODE -ne 0) { throw "Carbon build failed (exit $LASTEXITCODE) -- not touching the running server." }
+}
+
 # Copies a locally-built Carbon overlay (winhttp.dll + doorstop_config.ini + carbon\)
 # over the instance's server install -- the same overlay the downloaded zip applies.
 function Deploy-LocalCarbon {

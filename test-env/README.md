@@ -86,6 +86,12 @@ so a failed build never kills a working instance. Without `-Build` it redeploys 
 already-built overlay (`-Restart` to bounce it). Set `CarbonDebugSuspend = $true` to
 freeze boot until you attach (for early-init bugs).
 
+**Server log.** `carbon-debug` routes output to `logs\server.log` (RustDedicated's
+live console otherwise throws a cosmetic `SetConsoleCursorInfo failed`). Tail it:
+`Get-Content -Wait -Tail 100 servers\rust-carbon-debug\server\logs\server.log` — and
+send server commands via RCON (`:28241`) or the Carbon web panel. To keep the
+interactive in-window console instead, set `CarbonDebugLogFile = $false`.
+
 ## Config
 
 `Local.config.ps1` (git-ignored, created from `Local.config.example.ps1`) holds

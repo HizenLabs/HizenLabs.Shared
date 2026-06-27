@@ -158,6 +158,16 @@ function Get-CarbonDebugGameBranch {
     return 'staging'
 }
 
+# Whether carbon-debug routes server output to logs\server.log instead of the
+# interactive console. Avoids Rust's cosmetic 'SetConsoleCursorInfo failed' and
+# gives a tailable, copy-pasteable log; type server commands via RCON or the web
+# panel instead. Default $true. Set CarbonDebugLogFile=$false to keep the console.
+function Get-CarbonDebugUseLogFile {
+    param([Parameter(Mandatory)]$Cfg)
+    if ($null -ne $Cfg.CarbonDebugLogFile) { return [bool]$Cfg.CarbonDebugLogFile }
+    return $true
+}
+
 # Locates the Carbon repo root: explicit CarbonRepoPath if set, else derived by
 # walking up from CarbonLocalBuildPath to the folder holding the build script.
 function Get-CarbonRepoPath {

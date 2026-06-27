@@ -48,7 +48,7 @@ foreach ($inst in Resolve-Instances -Mod $Mod -Branch $Branch) {
 
     # Double-quote only the values that contain spaces.
     function q { param($s) '"' + $s + '"' }
-    $serverArgs = @(
+    $argList = @(
         '-batchmode', '-nographics',
         '+server.identity', $p.Identity,
         '+server.ip', '0.0.0.0',
@@ -66,14 +66,24 @@ foreach ($inst in Resolve-Instances -Mod $Mod -Branch $Branch) {
         '+rcon.web', '1',
         '+app.listenip', '127.0.0.1',
         '+app.port', $app
-    ) -join ' '
+    )
+
+    # carbon-debug: route output to a logfile instead of the interactive console.
+    # Rust's live-cursor console throws a cosmetic 'SetConsoleCursorInfo failed';
+    # -logfile sidesteps it and gives a tailable, copy-pasteable server log.
+    $logTail = $null
+    if ($p.Branch -eq 'debug' -and (Get-CarbonDebugUseLogFile -Cfg $cfg)) {
+        New-Item -ItemType Directory -Force -Path $p.LogDir | Out-Null
+        $logTail = Join-Path $p.LogDir 'server.log'
+        $argList += @('-logfile', (q $logTail))
+    }
+    $serverArgs = $argList -join ' '
 
     # Launch through `cmd start` so each server gets a REAL new console window (its
     # live, type-able console), even when this script runs inside VS Code / Windows
     # Terminal -- a bare Start-Process there just attaches the child to this shell.
     # The explicit quoted title stops `start` from treating the quoted exe path as
-    # the title. No -logfile: the window shows the live console. We can't get the
-    # PID from `start`, so find it by identity right after.
+    # the title. We can't get the PID from `start`, so find it by identity right after.
     $cmdLine = '/c start "rust-{0}" /D "{1}" "{2}" {3}' -f $inst, $p.Server, $p.Exe, $serverArgs
     Start-Process -FilePath 'cmd.exe' -ArgumentList $cmdLine | Out-Null
 
@@ -88,6 +98,10 @@ foreach ($inst in Resolve-Instances -Mod $Mod -Branch $Branch) {
             $inst, $proc.ProcessId, $game, $rcon, $owners) -ForegroundColor Green
         if ($p.Branch -eq 'debug') {
             Write-Host ("  Attach a Mono debugger (VS -> Tools for Unity) to {0}" -f (Get-CarbonDebugAddress -Cfg $cfg)) -ForegroundColor Cyan
+            if ($logTail) {
+                Write-Host ("  Live log:  Get-Content -Wait -Tail 100 '{0}'" -f $logTail) -ForegroundColor Cyan
+                Write-Host  "  (logfile mode -- send server commands via RCON :$rcon or the Carbon web panel)" -ForegroundColor DarkGray
+            }
         }
     } else {
         Write-Host ("Launched {0} but couldn't confirm the process -- check its window for a startup error." -f $inst) -ForegroundColor Yellow

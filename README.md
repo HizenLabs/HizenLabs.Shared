@@ -21,11 +21,11 @@ each output stays lean.
 
 ## Building
 
-The game and framework assemblies come from the test-env: start it once and each
-server exports its managed set to `test-env/docker/servers/<name>/refs`.
+The game and framework assemblies come from the test-env: install it once and each
+server exports its managed set to `test-env/servers/rust-<instance>/refs`.
 
 ```powershell
-.\test-env\start.ps1   # boots the docker matrix; exports refs on container start
+.\test-env\install.ps1   # SteamCMD + game + mod install; exports refs
 
 # Build a target: Configuration {Release|Staging} x Platform {Carbon|Oxide}
 dotnet build HizenLabs.Shared.slnx -p:Configuration=Release -p:Platform=Carbon

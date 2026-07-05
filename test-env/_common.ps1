@@ -2,16 +2,15 @@
 # Shared helpers for the local Rust test-env scripts. Dot-sourced by the others:
 #     . "$PSScriptRoot\_common.ps1"
 #
-# Preserves the old docker matrix -- {carbon,oxide} x {release,staging}, same
-# instance names (rust-<mod>-<branch>) and ports -- but everything lives in a
-# plain local install under .\servers\ instead of a container.
+# The instance matrix -- {carbon,oxide} x {release,staging}, instance names
+# rust-<mod>-<branch> -- each a plain local install under .\servers\.
 # =============================================================================
 $ErrorActionPreference = 'Stop'
 
 $script:Mods     = @('carbon', 'oxide')
 $script:Branches = @('release', 'staging')
 
-# game=BASE/udp  rcon=BASE+1/tcp  query=BASE+2/udp  app=BASE+3/tcp  (matches docker)
+# game=BASE/udp  rcon=BASE+1/tcp  query=BASE+2/udp  app=BASE+3/tcp
 # carbon-debug is an opt-in extra instance (see Resolve-Instances) running a LOCAL
 # Carbon build with the Mono debugger on; it sits past the matrix at 28240.
 $script:PortBase = @{
@@ -25,7 +24,7 @@ $script:PortBase = @{
 function Get-TestEnvRoot { $PSScriptRoot }
 
 # -Mod/-Branch (All|Carbon|Oxide / All|Release|Staging|Debug) -> instance keys like
-# 'carbon-release'. Same expansion start.ps1/stop.ps1 used under docker.
+# 'carbon-release'.
 # 'Debug' is the special carbon-only local-build instance (carbon-debug); it is
 # opt-in and deliberately NOT part of 'All' so a bare start/install never touches it.
 function Resolve-Instances {

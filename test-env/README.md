@@ -1,12 +1,11 @@
 # Local test-env
 
-Local Windows Rust test servers for plugin development. Same matrix as before --
-`{carbon, oxide} x {release, staging}`, four instances on the same ports -- but
-each is a plain on-disk install under `.\servers\`, no Docker.
+Local Windows Rust test servers for plugin development, a
+`{carbon, oxide} x {release, staging}` matrix of four instances -- each a plain
+on-disk install under `.\servers\`.
 
-> The `docker\` folder (and `rebuild.ps1`) is the **old container flow**, kept for
-> reference. The scripts below replace it. Nothing under `servers\`, `.steamcmd\`
-> or `Local.config.ps1` is committed (see `.gitignore`).
+> Nothing under `servers\`, `.steamcmd\` or `Local.config.ps1` is committed
+> (see `.gitignore`).
 
 ## First run
 

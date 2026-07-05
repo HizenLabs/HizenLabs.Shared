@@ -10,9 +10,9 @@
 
     <!-- Build target matrix: Configuration {Release|Staging} x Platform {Carbon|Oxide}.
          RustManagedDir resolves to that server's exported managed assemblies in the
-         test-env (the container copies them to servers/<name>/refs on boot). Path is
-         relative to THIS props file, so it works whether shared is built standalone or
-         imported as a submodule of a plugin repo. -->
+         test-env (install.ps1 exports game + mod DLLs to servers/rust-<instance>/refs).
+         Path is relative to THIS props file, so it works whether shared is built
+         standalone or imported as a submodule of a plugin repo. -->
     <RustManagedDir Condition="'$(RustManagedDir)' == ''">$(MSBuildThisFileDirectory)test-env/servers/rust-$(Platform.ToLowerInvariant())-$(Configuration.ToLowerInvariant())/refs</RustManagedDir>
   </PropertyGroup>
 
@@ -55,7 +55,7 @@
   </ItemGroup>
 
   <!-- Deploy: bundle the selected plugin(s) and copy the bundled single .cs into the active target
-       server's plugins folder, which the running container hot-loads - so the server runs the same
+       server's plugins folder, which the running server hot-loads - so the server runs the same
        artifact players get (inlined shared code, #if CARBON split, [Info] stamped). The target
        server is whichever Configuration|Platform you built (Release|Carbon -> rust-carbon-release).
        Opt-in per developer via a git-ignored Deploy.local.props at the plugin repo root (see

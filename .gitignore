@@ -23,4 +23,3 @@ Thumbs.db
 
 # Local-only overrides
 Directory.Build.User.props
-/test-env

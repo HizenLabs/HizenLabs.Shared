@@ -57,7 +57,7 @@ function Get-CarbonUrl {
 function Get-OxideUrl {
     param([string]$BranchKey)
     if ($BranchKey -eq 'staging') {
-        return 'https://downloads.oxidemod.com/artifacts/Oxide.Rust/staging/Oxide.Rust-win.zip'
+        return 'https://downloads.oxidemod.com/artifacts/Oxide.Rust/staging/Oxide.Rust.zip'
     }
     return 'https://umod.org/games/rust/download?tag=public'
 }

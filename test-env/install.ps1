@@ -42,11 +42,11 @@ function Get-CarbonUrl {
     param([string]$BranchKey)   # release | staging
     if ($BranchKey -eq 'staging') {
         # Must match the staging game build -- resolve the Windows asset off the tag.
-        # Staging tags publish only Debug and Minimal flavors (no Release). Prefer
-        # Minimal: Debug-flavor Carbon is for the carbon-debug instance, not a plain
-        # staging server (it also breaks ServerConsole cursor handling).
+        # Staging tags publish only Debug and Minimal flavors (no Release). Debug is
+        # the FULL build for staging (admin panel, all modules + dev extras; the name
+        # is the compile config, not "for the debugger") -- Minimal strips features.
         $rel = Invoke-RestMethod 'https://api.github.com/repos/CarbonCommunity/Carbon/releases/tags/rustbeta_staging_build' -Headers @{ 'User-Agent' = 'hizen-testenv' }
-        $asset = $rel.assets | Where-Object { $_.name -eq 'Carbon.Windows.Minimal.zip' } | Select-Object -First 1
+        $asset = $rel.assets | Where-Object { $_.name -eq 'Carbon.Windows.Debug.zip' } | Select-Object -First 1
         if (-not $asset) { $asset = $rel.assets | Where-Object { $_.name -match 'Carbon\.Windows.*\.zip$' } | Select-Object -First 1 }
         if (-not $asset) { throw "No Carbon Windows asset on rustbeta_staging_build. Assets: $($rel.assets.name -join ', ')" }
         return $asset.browser_download_url

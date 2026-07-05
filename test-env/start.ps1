@@ -70,28 +70,20 @@ foreach ($inst in Resolve-Instances -Mod $Mod -Branch $Branch) {
 
     $serverArgs = $argList -join ' '
 
-    if ($p.Branch -eq 'debug') {
-        # Open its OWN console window (via cmd, so it's a separate window even from VS
-        # Code / Windows Terminal), but run the exe as a DIRECT child of cmd (`cmd /c
-        # "<exe>"`, NOT `cmd /c start`). The exe then shares cmd's normal console -- a
-        # clean console the Mono debugger can drive. `cmd /c start` instead detaches the
-        # exe into a fresh console whose handles the debugger chokes on (Rust's
-        # ServerConsole -> 'SetConsoleCursorInfo failed'); a bare Start-Process <exe> has
-        # no window of its own here. This gives a real server console AND a live debugger.
-        # /s + wrapping the whole command in an OUTER quote pair is required: the args
-        # contain several quoted values (map, hostname, password), so without it cmd's
-        # quote-stripping mangles the exe path and the server never starts.
-        $cmdLine = '/s /c ""{0}" {1}"' -f $p.Exe, $serverArgs
-        Start-Process -FilePath 'cmd.exe' -ArgumentList $cmdLine -WorkingDirectory $p.Server | Out-Null
-    }
-    else {
-        # Launch through `cmd start` so the server gets a REAL new console window (its
-        # live, type-able console), even from VS Code / Windows Terminal. The quoted
-        # title stops `start` from treating the quoted exe path as the title. We can't
-        # get the PID from `start`, so find it by identity right after.
-        $cmdLine = '/c start "rust-{0}" /D "{1}" "{2}" {3}' -f $inst, $p.Server, $p.Exe, $serverArgs
-        Start-Process -FilePath 'cmd.exe' -ArgumentList $cmdLine | Out-Null
-    }
+    # Open the instance's OWN console window (via cmd, so it's a separate window even
+    # from VS Code / Windows Terminal) and run the exe as a DIRECT child of cmd
+    # (`cmd /s /c ""<exe>" <args>"`, NOT `cmd /c start`). `start` detaches the exe into
+    # a fresh console whose handles Mono's console driver chokes on with Carbon DEBUG
+    # flavored builds -- the CI staging zip (Carbon.Windows.Debug.zip) and the local
+    # carbon-debug build alike -- spamming 'SetConsoleCursorInfo failed' from
+    # ServerConsole.LogThread. Sharing cmd's console works for every flavor, still
+    # gives a real type-able server console, and for carbon-debug it's also the
+    # console the Mono debugger can drive.
+    # /s + wrapping the whole command in an OUTER quote pair is required: the args
+    # contain several quoted values (map, hostname, password), so without it cmd's
+    # quote-stripping mangles the exe path and the server never starts.
+    $cmdLine = '/s /c ""{0}" {1}"' -f $p.Exe, $serverArgs
+    Start-Process -FilePath 'cmd.exe' -ArgumentList $cmdLine -WorkingDirectory $p.Server | Out-Null
 
     $proc = $null
     for ($i = 0; $i -lt 20 -and -not $proc; $i++) {

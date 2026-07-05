@@ -26,10 +26,10 @@
        Oxide.Plugins.DescriptionAttribute lives; Carbon's attributes are global-namespace).
        Build-generated (obj/*.GlobalUsings.g.cs), so it never enters the source tree and the
        bundler never inlines it into the shipped plugin. -->
-  <ItemGroup Condition="'$(Platform)' == 'Carbon'">
+  <ItemGroup Condition="'$(Platform)' == 'Carbon' AND '$(ReferenceRustAssemblies)' == 'true'">
     <Using Include="Carbon.Plugins" />
   </ItemGroup>
-  <ItemGroup Condition="'$(Platform)' == 'Oxide'">
+  <ItemGroup Condition="'$(Platform)' == 'Oxide' AND '$(ReferenceRustAssemblies)' == 'true'">
     <Using Include="Oxide.Plugins" />
   </ItemGroup>
 

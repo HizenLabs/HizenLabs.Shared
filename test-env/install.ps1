@@ -49,8 +49,8 @@ function Get-CarbonUrl {
     }
     switch ($cfg.CarbonReleaseChannel) {
         'Edge'    { 'https://github.com/CarbonCommunity/Carbon/releases/download/edge_build/Carbon.Windows.Debug.zip' }
-        'Preview' { 'https://github.com/CarbonCommunity/Carbon.Core/releases/download/preview_build/Carbon.Windows.Debug.zip' }
-        default   { 'https://github.com/CarbonCommunity/Carbon.Core/releases/download/production_build/Carbon.Windows.Release.zip' }
+        'Preview' { throw "CarbonReleaseChannel 'Preview' is dead: Carbon no longer publishes preview_build. Set 'Production' or 'Edge' in Local.config.ps1." }
+        default   { 'https://github.com/CarbonCommunity/Carbon/releases/download/production_build/Carbon.Windows.Release.zip' }
     }
 }
 

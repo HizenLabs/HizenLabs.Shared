@@ -25,7 +25,8 @@
     ServerLevel  = 'Procedural Map'
     Tickrate     = 30
 
-    # Carbon channel used for the 'release' branch install: Production | Preview | Edge.
+    # Carbon channel used for the 'release' branch install: Production | Edge.
+    # ('Preview' is gone -- Carbon stopped publishing preview_build.)
     # ('staging' branch always uses Carbon's rustbeta_staging_build to match the
     # staging game build -- this setting does not affect it.)
     CarbonReleaseChannel = 'Production'

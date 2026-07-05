@@ -21,6 +21,16 @@
     <DefineConstants>$(DefineConstants);CARBON</DefineConstants>
   </PropertyGroup>
 
+  <!-- [Description] resolves differently per loader: Carbon's DescriptionAttribute is in the
+       GLOBAL namespace (Carbon.SDK), Oxide's is Oxide.Plugins.DescriptionAttribute
+       (Oxide.CSharp.dll). The bundled artifact lands in namespace Oxide.Plugins, so it
+       resolves at load on both -- only IDE/csproj builds of the raw source need help on the
+       Oxide side. This build-generated global alias (obj/*.GlobalUsings.g.cs) keeps that out
+       of the source tree, so the bundler never inlines it into the shipped plugin. -->
+  <ItemGroup Condition="'$(Platform)' == 'Oxide'">
+    <Using Include="Oxide.Plugins.DescriptionAttribute" Alias="DescriptionAttribute" />
+  </ItemGroup>
+
   <!-- Game + framework assemblies for net48 projects that opt in. The refs dir already
        holds the right set per target (game + Carbon, or game + Oxide). Excluded:
          - base System*/mscorlib/netstandard/Mono.*/I18N* : BCL + facades resolved from the net48

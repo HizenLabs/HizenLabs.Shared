@@ -48,8 +48,15 @@ foreach ($inst in Resolve-Instances -Mod $Mod -Branch $Branch) {
 
     # Double-quote only the values that contain spaces.
     function q { param($s) '"' + $s + '"' }
+    # -logfile is REQUIRED to keep the console clean: RustDedicated is a Unity dedicated-server
+    # build, and those write the engine log to stdout when no -logfile is given. Rust's own
+    # ServerConsole (input line + fps/gc status bar) renders every line too, so without this
+    # flag ALL console output appears twice (one plain copy, one ServerConsole-rendered copy).
+    # With it, the raw engine stream goes to the file and the console shows one copy.
+    New-Item -ItemType Directory -Force -Path $p.LogDir | Out-Null
     $argList = @(
         '-batchmode', '-nographics',
+        '-logfile', (q (Join-Path $p.LogDir 'RustDedicated.log')),
         '+server.identity', $p.Identity,
         '+server.ip', '0.0.0.0',
         '+server.port', $game,

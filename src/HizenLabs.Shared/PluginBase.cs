@@ -7,7 +7,7 @@ namespace HizenLabs.Shared;
 /// the server sees <c>: CarbonPlugin</c> or <c>: RustPlugin</c>.
 /// </summary>
 #if CARBON
-public abstract class PluginBase : Carbon.Plugins.CarbonPlugin { }
+public abstract class PluginBase : CarbonPlugin { }
 #else
-public abstract class PluginBase : Oxide.Plugins.RustPlugin { }
+public abstract class PluginBase : RustPlugin { }
 #endif

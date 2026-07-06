@@ -52,6 +52,10 @@ public class BundlerTests
         // The marker base and its import are gone (swapped, not inlined).
         Assert.DoesNotContain(": PluginBase", result.Source);
         Assert.DoesNotContain("using HizenLabs", result.Source);
+
+        // Usings from inlined shared files are merged in (FooService needs System for AppDomain);
+        // without this the nested body fails the platform compile with CS0103.
+        Assert.Contains("using System;", result.Source);
     }
 
     private static string Normalize(string s) =>

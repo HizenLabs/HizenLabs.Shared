@@ -86,8 +86,11 @@
   <Target Name="DeployPlugins" AfterTargets="Build" Condition="'$(DeployEnabled)' == 'true' AND '$(DeployTarget)' == 'true' AND '@(DeployPlugin)' != ''">
     <!-- Resolve each plugin NAME to its source file under src/. The repo root is one level up
          from this shared submodule (<repo>/shared -> <repo>), so plugin sources live in <repo>/src. -->
+    <!-- Exclude bin/obj: the staging dir below lives under the project's obj, so without this the
+         glob re-matches previously bundled outputs as plugin sources. -->
     <ItemGroup>
-      <_DeployPluginFile Include="$(MSBuildThisFileDirectory)..\src\**\%(DeployPlugin.Identity).cs" />
+      <_DeployPluginFile Include="$(MSBuildThisFileDirectory)..\src\**\%(DeployPlugin.Identity).cs"
+                         Exclude="$(MSBuildThisFileDirectory)..\src\**\obj\**;$(MSBuildThisFileDirectory)..\src\**\bin\**" />
     </ItemGroup>
     <Error Condition="@(_DeployPluginFile->Count()) &lt; @(DeployPlugin->Count())"
            Text="[deploy] A listed plugin has no matching .cs under src/. Requested: @(DeployPlugin). Resolved: @(_DeployPluginFile->'%(Filename)'). List plugins by their .cs filename only (no path, no extension)." />

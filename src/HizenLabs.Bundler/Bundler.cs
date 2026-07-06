@@ -119,6 +119,11 @@ public static class Bundler
         // own (neutral) namespace is kept - the transform pipeline turns it into the #if split.
         root = RemoveUsings(root, sharedNamespaces);
 
+        // Merge the using directives from the shared files whose types were inlined - a nested
+        // type's body still needs them (e.g. `using System;` for AppDomain) and the plugin file
+        // only carries its own. Shared-namespace usings are excluded like above.
+        root = MergeSharedUsings(root, reachable.Select(t => sharedTypes[t].SyntaxTree), sharedNamespaces);
+
         var inlinedSource = root.NormalizeWhitespace().ToFullString();
         var source = TransformPipeline.Run(inlinedSource, options: opts);
 
@@ -173,6 +178,27 @@ public static class Bundler
                 u.Name.ToString() == ns || u.Name.ToString().StartsWith(ns + ".", StringComparison.Ordinal)))
             .ToArray();
         return root.RemoveNodes(drop, SyntaxRemoveOptions.KeepNoTrivia) ?? root;
+    }
+
+    private static CompilationUnitSyntax MergeSharedUsings(
+        CompilationUnitSyntax root, IEnumerable<SyntaxTree> inlinedTrees, HashSet<string> sharedNamespaces)
+    {
+        static string Key(UsingDirectiveSyntax u) =>
+            $"{u.StaticKeyword.IsKind(SyntaxKind.StaticKeyword)}|{u.Alias?.Name}|{u.Name}";
+
+        bool IsShared(UsingDirectiveSyntax u) =>
+            u.Name is not null && sharedNamespaces.Any(ns =>
+                u.Name.ToString() == ns || u.Name.ToString().StartsWith(ns + ".", StringComparison.Ordinal));
+
+        var have = new HashSet<string>(root.Usings.Select(Key));
+        var add = inlinedTrees
+            .Distinct()
+            .SelectMany(t => t.GetRoot().DescendantNodes().OfType<UsingDirectiveSyntax>())
+            .Where(u => u.GlobalKeyword.IsKind(SyntaxKind.None) && !IsShared(u))
+            .Where(u => have.Add(Key(u)))
+            .Select(u => u.WithoutTrivia())
+            .ToArray();
+        return add.Length > 0 ? root.AddUsings(add) : root;
     }
 
     /// <summary>The net10 trusted-platform assemblies; used only for the (syntactic) reachability pass.</summary>

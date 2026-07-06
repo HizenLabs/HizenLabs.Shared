@@ -1,3 +1,5 @@
+using System;
+
 #if CARBON
 namespace Carbon.Plugins;
 #else
@@ -24,6 +26,7 @@ public class FooPlugin :
     private static class FooService
     {
         public static string Greeting(string name) => TextBox.Frame($"foo says hi, {name}");
+        public static string Domain() => AppDomain.CurrentDomain.FriendlyName;
     }
 
     private static class TextBox

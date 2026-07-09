@@ -67,7 +67,7 @@ public class BundlerTests
 
     private static string PartialFixtureDir => Path.Combine(AppContext.BaseDirectory, "fixtures", "partial-demo");
 
-    private static BundleResult BundlePartialDemo()
+    private static BundleResult BundlePartialDemo(bool partRegions = true)
     {
         var dir = PartialFixtureDir;
         var plugin = Path.Combine(dir, "BarPlugin.cs");
@@ -77,7 +77,7 @@ public class BundlerTests
             .Concat(Directory.EnumerateFiles(dir, "*.cs", SearchOption.TopDirectoryOnly))
             .Where(f => !string.Equals(Path.GetFullPath(f), Path.GetFullPath(plugin), StringComparison.OrdinalIgnoreCase))
             .ToList();
-        return Bundler.Bundle(new BundleRequest(plugin, shared));
+        return Bundler.Bundle(new BundleRequest(plugin, shared, PartRegions: partRegions));
     }
 
     [Fact]
@@ -129,6 +129,25 @@ public class BundlerTests
         var menuIds = root.DescendantNodes().OfType<TypeDeclarationSyntax>()
             .Where(t => t.Identifier.Text == "MenuId").ToList();
         Assert.Single(menuIds);
+    }
+
+    [Fact]
+    public void Without_part_regions_the_merge_still_happens_but_carries_no_source_markers()
+    {
+        // Release bundles (deploy target without Staging, and the GitHub release workflow) pass
+        // no --part-regions: same merged shape, no provenance regions.
+        var result = BundlePartialDemo(partRegions: false);
+
+        Assert.DoesNotContain("#region shared/", result.Source);
+        Assert.DoesNotContain("#region partial-demo/", result.Source);
+
+        var root = CSharpSyntaxTree.ParseText(result.Source).GetRoot();
+        Assert.Single(root.DescendantNodes().OfType<TypeDeclarationSyntax>()
+            .Where(t => t.Identifier.Text == "Menu"));
+        Assert.Single(root.DescendantNodes().OfType<TypeDeclarationSyntax>()
+            .Where(t => t.Identifier.Text == "BarPlugin"));
+        Assert.Contains("ShowMenuHook", result.Source);
+        Assert.Contains("CarbonOnly", result.Source);
     }
 
     private static string Normalize(string s) =>

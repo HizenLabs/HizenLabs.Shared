@@ -35,6 +35,7 @@ static int Bundle(string[] args)
     var sharedDirs = new List<string>();
     string[]? carbonRefs = null, oxideRefs = null;
     var dev = false;
+    var partRegions = false;
     for (var i = 0; i < args.Length; i++)
     {
         switch (args[i])
@@ -45,6 +46,7 @@ static int Bundle(string[] args)
             case "--version": version = args[++i]; break;
             case "--changelog": changelog = args[++i]; break;
             case "--dev": dev = true; break;
+            case "--part-regions": partRegions = true; break;
             case "--carbon-refs": carbonRefs = SplitDirs(args[++i]); break;
             case "--oxide-refs": oxideRefs = SplitDirs(args[++i]); break;
             default: return Usage($"unknown argument: {args[i]}");
@@ -71,7 +73,8 @@ static int Bundle(string[] args)
         sharedFiles,
         Transform: new TransformOptions { Version = resolved },
         CarbonRefDirs: carbonRefs,
-        OxideRefDirs: oxideRefs));
+        OxideRefDirs: oxideRefs,
+        PartRegions: partRegions));
 
     // Always emit (even on a failed compile-check) so the bad bundle is on disk to inspect.
     string? outFull = null;
@@ -225,7 +228,7 @@ static int Usage(string? message)
     Console.Error.WriteLine(
         "usage:\n" +
         "  hizenbundle bundle --plugin <f> --shared-dir <d>[;<d>...] (--version <v> | --changelog <f>) [--dev]\n" +
-        "             [--out <f>] [--carbon-refs <d>[;...]] [--oxide-refs <d>[;...]]\n" +
+        "             [--part-regions] [--out <f>] [--carbon-refs <d>[;...]] [--oxide-refs <d>[;...]]\n" +
         "  hizenbundle version (--version <v> | --changelog <f>) [--dev] | --all --changelog <f>\n" +
         "  hizenbundle notes --changelog <f>\n" +
         "  hizenbundle validate --changelog <f>");

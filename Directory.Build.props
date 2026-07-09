@@ -108,6 +108,10 @@
       <!-- Compile-check the bundle against the platform we're building for. -->
       <_RefsFlag Condition="'$(Platform)' == 'Carbon'">--carbon-refs</_RefsFlag>
       <_RefsFlag Condition="'$(Platform)' != 'Carbon'">--oxide-refs</_RefsFlag>
+      <!-- Staging bundles carry #region <source file> provenance markers around merged partial
+           parts; Release bundles (local or the GitHub release workflow, which passes no flag)
+           ship without them. -->
+      <_PartRegionsFlag Condition="'$(Configuration)' == 'Staging'">--part-regions</_PartRegionsFlag>
     </PropertyGroup>
 
     <!-- Build the bundler once with the current matrix so its dll is present to exec. -->
@@ -129,7 +133,7 @@
          non-obvious exit 2. GetDirectoryName yields the same folder with no trailing separator.
          stderr is folded into stdout (2>&1) and captured so a failure surfaces the bundler's own
          diagnostics as a build Error instead of a bare "exited with code 2". -->
-    <Exec Command="dotnet exec &quot;$(_BundlerDll)&quot; bundle --plugin &quot;%(_DeployPluginFile.FullPath)&quot; --shared-dir &quot;$(_SharedRuntimeDir)&quot; --shared-dir &quot;$([System.IO.Path]::GetDirectoryName('%(_DeployPluginFile.FullPath)'))&quot; --changelog &quot;%(_DeployPluginFile.RootDir)%(_DeployPluginFile.Directory)CHANGELOG.md&quot; --dev --out &quot;$(_BundleStageDir)\%(_DeployPluginFile.Filename).cs&quot; $(_RefsFlag) &quot;$(RustManagedDir)&quot; 2&gt;&amp;1"
+    <Exec Command="dotnet exec &quot;$(_BundlerDll)&quot; bundle --plugin &quot;%(_DeployPluginFile.FullPath)&quot; --shared-dir &quot;$(_SharedRuntimeDir)&quot; --shared-dir &quot;$([System.IO.Path]::GetDirectoryName('%(_DeployPluginFile.FullPath)'))&quot; --changelog &quot;%(_DeployPluginFile.RootDir)%(_DeployPluginFile.Directory)CHANGELOG.md&quot; --dev $(_PartRegionsFlag) --out &quot;$(_BundleStageDir)\%(_DeployPluginFile.Filename).cs&quot; $(_RefsFlag) &quot;$(RustManagedDir)&quot; 2&gt;&amp;1"
           ConsoleToMSBuild="true" IgnoreExitCode="true">
       <Output TaskParameter="ConsoleOutput" ItemName="_BundleLog" />
       <Output TaskParameter="ExitCode" PropertyName="_BundleExit" />

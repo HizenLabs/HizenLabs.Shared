@@ -13,7 +13,8 @@ public sealed record BundleRequest(
     IReadOnlyList<string> SharedPaths,
     TransformOptions? Transform = null,
     IReadOnlyList<string>? CarbonRefDirs = null,
-    IReadOnlyList<string>? OxideRefDirs = null);
+    IReadOnlyList<string>? OxideRefDirs = null,
+    bool PartRegions = false);
 
 /// <summary>Result of compiling the bundled source under one platform's symbol set + references.</summary>
 public sealed record PlatformCheck(string Platform, IReadOnlyList<Diagnostic> Errors)
@@ -146,11 +147,13 @@ public static class Bundler
         }
 
         // Inline reachable shared types as private nested members. A partial type's parts are
-        // merged into ONE nested declaration, each part's content wrapped in a
-        // #region <source file> for provenance; the merge moves whole part bodies so #if regions
-        // carry over verbatim. When a part's directives make the merge unsafe (unbalanced inside
-        // the body, or wrapping the declaration itself), the type falls back to one nested
-        // partial per part - still-correct output, just less pretty.
+        // merged into ONE nested declaration; with PartRegions (staging deploys) each part's
+        // content is wrapped in a #region <source file> for provenance. The merge moves whole
+        // part bodies so #if regions carry over verbatim. When a part's directives make the merge
+        // unsafe (unbalanced inside the body, or wrapping the declaration itself), the type falls
+        // back to one nested partial per part - still-correct output, just less pretty.
+        string? Label(TypeDeclarationSyntax d) => req.PartRegions ? PartLabel(d) : null;
+
         var nested = reachable
             .OrderBy(t => t.Name, StringComparer.Ordinal)
             .SelectMany(t =>
@@ -161,23 +164,23 @@ public static class Bundler
                     .ToList();
                 if (parts.Count == 1)
                     return new[] { parts[0] };
-                var merged = MergeParts(parts.Select(d => (d, (string?)PartLabel(d))).ToList());
+                var merged = MergeParts(parts.Select(d => (d, Label(d))).ToList());
                 return merged is not null ? new[] { merged } : parts.ToArray();
             })
             .Select(MakePrivateNested)
             .ToArray();
 
-        // The plugin's own partial parts merge INTO the entry class the same way, each wrapped in
-        // its #region <source file>. Fallback (unsafe directives): sibling top-level partial
-        // declarations after the entry class - the entry stays first either way so the transform
-        // pipeline's "first public type" resolution keeps hitting it.
+        // The plugin's own partial parts merge INTO the entry class the same way. Fallback
+        // (unsafe directives): sibling top-level partial declarations after the entry class - the
+        // entry stays first either way so the transform pipeline's "first public type" resolution
+        // keeps hitting it.
         var orderedPluginParts = pluginParts
             .OrderBy(d => d.SyntaxTree.FilePath, StringComparer.OrdinalIgnoreCase)
             .ToList();
         var mergedPlugin = orderedPluginParts.Count == 0
             ? null
             : MergeParts(new[] { (pluginType, (string?)null) }
-                .Concat(orderedPluginParts.Select(d => (d, (string?)PartLabel(d)))).ToList());
+                .Concat(orderedPluginParts.Select(d => (d, Label(d)))).ToList());
 
         var siblingParts = mergedPlugin is not null
             ? Array.Empty<MemberDeclarationSyntax>()

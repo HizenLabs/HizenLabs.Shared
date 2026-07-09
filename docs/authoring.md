@@ -51,9 +51,9 @@ Rules that keep this working:
 - **Unreferenced types are dropped.** If a type isn't reached from the plugin, it won't be in the
   output - dead code stays out of the bundle.
 - **Partial-ing the plugin class across files works.** Part files in the plugin's folder merge
-  into the entry class, each part's content wrapped in a `#region` naming its source file, and
-  are never tree-shaken (a part holding only hook methods still ships). Partial shared types
-  merge the same way into one nested declaration.
+  into the entry class and are never tree-shaken (a part holding only hook methods still ships).
+  Partial shared types merge the same way into one nested declaration. Staging deploys wrap each
+  part's content in a `#region` naming its source file; release bundles carry no markers.
 - The marker base `PluginBase` is **aliased, not inlined** - the bundle keeps `: PluginBase` and
   prepends a platform-split `using PluginBase = Carbon.Plugins.CarbonPlugin;` /
   `Oxide.Plugins.RustPlugin;` alias (marker-alias transform); the dev-time

@@ -81,7 +81,7 @@ public class BundlerTests
     }
 
     [Fact]
-    public void Partial_shared_type_keeps_every_part_as_a_nested_partial()
+    public void Partial_shared_type_merges_every_part_into_one_nested_declaration()
     {
         var result = BundlePartialDemo();
 
@@ -95,28 +95,32 @@ public class BundlerTests
         Assert.Contains("using PluginBase = Carbon.Plugins.CarbonPlugin;", result.Source);
         Assert.Contains("using PluginBase = Oxide.Plugins.RustPlugin;", result.Source);
 
-        // Each part is its own nested partial inside the plugin class (parse without CARBON
-        // defined; the Menu.Carbon part's body is inactive but its declaration still parses).
+        // The parts merge into ONE nested declaration inside the plugin class, each part's
+        // content wrapped in a #region naming its source file.
         var root = CSharpSyntaxTree.ParseText(result.Source).GetRoot();
-        var menus = root.DescendantNodes().OfType<TypeDeclarationSyntax>()
-            .Where(t => t.Identifier.Text == "Menu").ToList();
-        Assert.Equal(3, menus.Count);
-        Assert.All(menus, m => Assert.IsAssignableFrom<TypeDeclarationSyntax>(m.Parent));
-        Assert.All(menus, m => Assert.Contains(m.Modifiers, t => t.IsKind(SyntaxKind.PartialKeyword)));
+        var menu = Assert.Single(root.DescendantNodes().OfType<TypeDeclarationSyntax>()
+            .Where(t => t.Identifier.Text == "Menu"));
+        Assert.IsAssignableFrom<TypeDeclarationSyntax>(menu.Parent);
+        Assert.Contains("#region shared/Menu.cs", result.Source);
+        Assert.Contains("#region shared/Menu.Carbon.cs", result.Source);
+        Assert.Contains("#region shared/Menu.Oxide.cs", result.Source);
+
+        // The base list survives the merge (only the core part declares it).
+        Assert.Contains(menu.BaseList!.Types, t => t.ToString() == "IDisposable");
     }
 
     [Fact]
-    public void Plugin_partial_parts_stay_top_level_and_are_never_tree_shaken()
+    public void Plugin_partial_parts_merge_into_the_entry_class_and_are_never_tree_shaken()
     {
         var result = BundlePartialDemo();
         var root = CSharpSyntaxTree.ParseText(result.Source).GetRoot();
 
-        // Exactly two BarPlugin declarations (entry + the part file), both top-level siblings -
-        // the part must not be inlined as a nested type of itself.
-        var bars = root.DescendantNodes().OfType<TypeDeclarationSyntax>()
-            .Where(t => t.Identifier.Text == "BarPlugin").ToList();
-        Assert.Equal(2, bars.Count);
-        Assert.All(bars, b => Assert.False(b.Parent is TypeDeclarationSyntax, "plugin part was nested"));
+        // ONE BarPlugin declaration: the part file merged into the entry class, region-labeled
+        // with its source file - not nested inside itself, not a sibling.
+        var bar = Assert.Single(root.DescendantNodes().OfType<TypeDeclarationSyntax>()
+            .Where(t => t.Identifier.Text == "BarPlugin"));
+        Assert.False(bar.Parent is TypeDeclarationSyntax, "plugin part was nested");
+        Assert.Contains("#region partial-demo/BarPlugin.Menu.cs", result.Source);
 
         // The hook-only part member ships even though nothing references it.
         Assert.Contains("ShowMenuHook", result.Source);

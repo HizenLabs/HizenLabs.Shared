@@ -145,25 +145,45 @@ public static class Bundler
                 Seed(decl, compilation.GetSemanticModel(decl.SyntaxTree));
         }
 
-        // Inline reachable shared types as private nested members. A partial type is emitted as
-        // one nested partial per source part (nested partial types are legal C#), so each part's
-        // #if regions carry over verbatim - no member-level merging of trees.
+        // Inline reachable shared types as private nested members. A partial type's parts are
+        // merged into ONE nested declaration, each part's content wrapped in a
+        // #region <source file> for provenance; the merge moves whole part bodies so #if regions
+        // carry over verbatim. When a part's directives make the merge unsafe (unbalanced inside
+        // the body, or wrapping the declaration itself), the type falls back to one nested
+        // partial per part - still-correct output, just less pretty.
         var nested = reachable
             .OrderBy(t => t.Name, StringComparer.Ordinal)
-            .SelectMany(t => sharedTypes[t]
-                .OrderBy(d => d.SyntaxTree.FilePath, StringComparer.OrdinalIgnoreCase)
-                .Select(MakePrivateNested))
+            .SelectMany(t =>
+            {
+                var parts = sharedTypes[t]
+                    .OrderByDescending(d => d.BaseList is not null)
+                    .ThenBy(d => d.SyntaxTree.FilePath, StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+                if (parts.Count == 1)
+                    return new[] { parts[0] };
+                var merged = MergeParts(parts.Select(d => (d, (string?)PartLabel(d))).ToList());
+                return merged is not null ? new[] { merged } : parts.ToArray();
+            })
+            .Select(MakePrivateNested)
             .ToArray();
 
-        // The plugin's own partial parts become SIBLING top-level declarations after the entry
-        // class (same type, same namespace) - the entry stays first so the transform pipeline's
-        // "first public type" resolution keeps hitting it.
-        var siblingParts = pluginParts
+        // The plugin's own partial parts merge INTO the entry class the same way, each wrapped in
+        // its #region <source file>. Fallback (unsafe directives): sibling top-level partial
+        // declarations after the entry class - the entry stays first either way so the transform
+        // pipeline's "first public type" resolution keeps hitting it.
+        var orderedPluginParts = pluginParts
             .OrderBy(d => d.SyntaxTree.FilePath, StringComparer.OrdinalIgnoreCase)
-            .Select(d => (MemberDeclarationSyntax)d.WithoutLeadingTrivia())
-            .ToArray();
+            .ToList();
+        var mergedPlugin = orderedPluginParts.Count == 0
+            ? null
+            : MergeParts(new[] { (pluginType, (string?)null) }
+                .Concat(orderedPluginParts.Select(d => (d, (string?)PartLabel(d)))).ToList());
 
-        var newPluginType = pluginType.AddMembers(nested);
+        var siblingParts = mergedPlugin is not null
+            ? Array.Empty<MemberDeclarationSyntax>()
+            : orderedPluginParts.Select(d => (MemberDeclarationSyntax)d.WithoutLeadingTrivia()).ToArray();
+
+        var newPluginType = (mergedPlugin ?? pluginType).AddMembers(nested);
         if (siblingParts.Length > 0 && pluginType.Parent is BaseNamespaceDeclarationSyntax pluginNs)
         {
             root = root.ReplaceNode(pluginNs, pluginNs.ReplaceNode(pluginType, newPluginType).AddMembers(siblingParts));
@@ -219,6 +239,119 @@ public static class Bundler
 
     private static SyntaxTree Parse(string path) =>
         CSharpSyntaxTree.ParseText(File.ReadAllText(path), path: path);
+
+    /// <summary>Provenance label for a merged part: the last two path segments of its source file
+    /// (e.g. "UI/Menu.Carbon.cs"), shown as a #region around the part's content.</summary>
+    private static string PartLabel(TypeDeclarationSyntax decl)
+    {
+        var path = decl.SyntaxTree.FilePath;
+        if (string.IsNullOrEmpty(path))
+            return decl.Identifier.Text;
+        var segments = path.Replace('\\', '/').Split('/', StringSplitOptions.RemoveEmptyEntries);
+        return string.Join('/', segments.TakeLast(Math.Min(2, segments.Length)));
+    }
+
+    /// <summary>
+    /// Merges the partial declarations of one type into a single declaration: the first part is
+    /// the primary (header, modifiers, attributes); every part contributes its body content -
+    /// members plus the trivia between the braces, so #if/#region blocks (including disabled
+    /// text) move verbatim - wrapped in a <c>#region label</c> when a label is given. Base lists
+    /// are unioned. Returns null when any part's directives make the move unsafe: a directive in
+    /// the part's header or after its close brace (e.g. an #if wrapping the whole declaration), a
+    /// non-primary part carrying attributes, or a body whose directives aren't balanced.
+    /// </summary>
+    private static TypeDeclarationSyntax? MergeParts(IReadOnlyList<(TypeDeclarationSyntax Decl, string? Label)> parts)
+    {
+        if (parts.Any(p => !CanMergePart(p.Decl)))
+            return null;
+        if (parts.Skip(1).Any(p => p.Decl.AttributeLists.Count > 0))
+            return null;
+
+        var members = new List<MemberDeclarationSyntax>();
+        var pending = new List<SyntaxTrivia>();
+        foreach (var (decl, label) in parts)
+        {
+            var open = label is null ? Enumerable.Empty<SyntaxTrivia>() : ParseLeadingTrivia($"\n#region {label}\n");
+            var close = label is null ? Enumerable.Empty<SyntaxTrivia>() : ParseLeadingTrivia("\n#endregion\n");
+            var lead = pending.Concat(open).Concat(decl.OpenBraceToken.TrailingTrivia).ToList();
+            var tail = decl.CloseBraceToken.LeadingTrivia.Concat(close).ToList();
+            pending = new List<SyntaxTrivia>();
+
+            if (decl.Members.Count > 0)
+            {
+                var partMembers = decl.Members.ToList();
+                partMembers[0] = partMembers[0].WithLeadingTrivia(lead.Concat(partMembers[0].GetLeadingTrivia()));
+                var last = partMembers.Count - 1;
+                partMembers[last] = partMembers[last].WithTrailingTrivia(partMembers[last].GetTrailingTrivia().Concat(tail));
+                members.AddRange(partMembers);
+            }
+            else
+            {
+                // A part that is pure trivia under this parse (e.g. its whole body sits inside a
+                // #if branch that is disabled text right now) still ships its content.
+                pending.AddRange(lead.Concat(tail));
+            }
+        }
+
+        var baseTypes = parts
+            .Where(p => p.Decl.BaseList is not null)
+            .SelectMany(p => p.Decl.BaseList!.Types)
+            .GroupBy(t => t.ToString())
+            .Select(g => g.First().WithoutTrivia())
+            .ToList();
+
+        var primary = parts[0].Decl;
+        var merged = primary
+            .WithMembers(List(members))
+            .WithOpenBraceToken(Token(SyntaxKind.OpenBraceToken))
+            .WithCloseBraceToken(Token(SyntaxKind.CloseBraceToken).WithLeadingTrivia(pending));
+        return baseTypes.Count > 0
+            ? merged.WithBaseList(BaseList(SeparatedList(baseTypes)))
+            : merged.WithBaseList(null);
+    }
+
+    /// <summary>
+    /// True if a part's body content can be moved into a merged declaration without breaking
+    /// preprocessor structure: no directives attached to the header tokens or trailing the close
+    /// brace (an #if wrapping the whole declaration must stay put), and the directives between
+    /// the braces are balanced (#if/#endif, #region/#endregion) so they can travel as a block.
+    /// </summary>
+    private static bool CanMergePart(TypeDeclarationSyntax part)
+    {
+        static bool HasDirective(SyntaxTriviaList trivia) => trivia.Any(t => t.IsDirective);
+
+        foreach (var token in part.DescendantTokens())
+        {
+            if (token == part.OpenBraceToken)
+            {
+                if (HasDirective(token.LeadingTrivia))
+                    return false;
+                break;
+            }
+            if (HasDirective(token.LeadingTrivia) || HasDirective(token.TrailingTrivia))
+                return false;
+        }
+        if (HasDirective(part.CloseBraceToken.TrailingTrivia))
+            return false;
+
+        var body = part.OpenBraceToken.TrailingTrivia
+            .Concat(part.Members.SelectMany(m => m.DescendantTrivia()))
+            .Concat(part.CloseBraceToken.LeadingTrivia);
+        int ifDepth = 0, regionDepth = 0;
+        foreach (var trivia in body)
+        {
+            switch (trivia.Kind())
+            {
+                case SyntaxKind.IfDirectiveTrivia: ifDepth++; break;
+                case SyntaxKind.EndIfDirectiveTrivia: if (--ifDepth < 0) return false; break;
+                case SyntaxKind.ElseDirectiveTrivia:
+                case SyntaxKind.ElifDirectiveTrivia: if (ifDepth == 0) return false; break;
+                case SyntaxKind.RegionDirectiveTrivia: regionDepth++; break;
+                case SyntaxKind.EndRegionDirectiveTrivia: if (--regionDepth < 0) return false; break;
+            }
+        }
+        return ifDepth == 0 && regionDepth == 0;
+    }
 
     private static TypeDeclarationSyntax MakePrivateNested(TypeDeclarationSyntax type)
     {

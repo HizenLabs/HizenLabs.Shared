@@ -4,8 +4,10 @@ The bundler turns an authored plugin into the single `.cs` the server loads. It 
 phases:
 
 1. **Inline** - reachable shared types are merged into the plugin class as `private` nested
-   members (reachability tree-shaking). A partial type is emitted as one nested partial per
-   source part; partial parts of the plugin class itself become sibling top-level declarations.
+   members (reachability tree-shaking). A partial type's parts are merged into one declaration,
+   each part's content wrapped in a #region naming its source file; parts of the plugin class
+   itself merge into the entry class the same way. (Fallback when a part's directives make the
+   merge unsafe: separate partial declarations.)
    The author's neutral namespace is kept here, and the marker base (`PluginBase`) is
    deliberately *not* inlined - it is aliased in phase 2. One structural step; lives in
    `Bundler.cs`.

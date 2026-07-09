@@ -1,4 +1,7 @@
 using HizenLabs.Bundler;
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Xunit;
 
 namespace HizenLabs.Bundler.Tests;
@@ -56,6 +59,70 @@ public class BundlerTests
         // Usings from inlined shared files are merged in (FooService needs System for AppDomain);
         // without this the nested body fails the platform compile with CS0103.
         Assert.Contains("using System;", result.Source);
+    }
+
+    // ---- partial-demo: partial types across shared parts and across plugin part files ----
+
+    private static string PartialFixtureDir => Path.Combine(AppContext.BaseDirectory, "fixtures", "partial-demo");
+
+    private static BundleResult BundlePartialDemo()
+    {
+        var dir = PartialFixtureDir;
+        var plugin = Path.Combine(dir, "BarPlugin.cs");
+        // Mirror the deploy target: the shared runtime dir AND the plugin's own folder are both
+        // shared dirs (the entry file is excluded, like Program.cs does).
+        var shared = Directory.EnumerateFiles(Path.Combine(dir, "shared"), "*.cs", SearchOption.AllDirectories)
+            .Concat(Directory.EnumerateFiles(dir, "*.cs", SearchOption.TopDirectoryOnly))
+            .Where(f => !string.Equals(Path.GetFullPath(f), Path.GetFullPath(plugin), StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        return Bundler.Bundle(new BundleRequest(plugin, shared));
+    }
+
+    [Fact]
+    public void Partial_shared_type_keeps_every_part_as_a_nested_partial()
+    {
+        var result = BundlePartialDemo();
+
+        // All three Menu parts survive: the core members, the Carbon impl, the Oxide impl.
+        Assert.Contains("Create(", result.Source);
+        Assert.Contains("CarbonOnly", result.Source);
+        Assert.Contains("#if !CARBON", result.Source);
+
+        // Menu.Create keeps its PluginBase parameter, so the marker alias must be emitted (the
+        // marker class itself is never inlined).
+        Assert.Contains("using PluginBase = Carbon.Plugins.CarbonPlugin;", result.Source);
+        Assert.Contains("using PluginBase = Oxide.Plugins.RustPlugin;", result.Source);
+
+        // Each part is its own nested partial inside the plugin class (parse without CARBON
+        // defined; the Menu.Carbon part's body is inactive but its declaration still parses).
+        var root = CSharpSyntaxTree.ParseText(result.Source).GetRoot();
+        var menus = root.DescendantNodes().OfType<TypeDeclarationSyntax>()
+            .Where(t => t.Identifier.Text == "Menu").ToList();
+        Assert.Equal(3, menus.Count);
+        Assert.All(menus, m => Assert.IsAssignableFrom<TypeDeclarationSyntax>(m.Parent));
+        Assert.All(menus, m => Assert.Contains(m.Modifiers, t => t.IsKind(SyntaxKind.PartialKeyword)));
+    }
+
+    [Fact]
+    public void Plugin_partial_parts_stay_top_level_and_are_never_tree_shaken()
+    {
+        var result = BundlePartialDemo();
+        var root = CSharpSyntaxTree.ParseText(result.Source).GetRoot();
+
+        // Exactly two BarPlugin declarations (entry + the part file), both top-level siblings -
+        // the part must not be inlined as a nested type of itself.
+        var bars = root.DescendantNodes().OfType<TypeDeclarationSyntax>()
+            .Where(t => t.Identifier.Text == "BarPlugin").ToList();
+        Assert.Equal(2, bars.Count);
+        Assert.All(bars, b => Assert.False(b.Parent is TypeDeclarationSyntax, "plugin part was nested"));
+
+        // The hook-only part member ships even though nothing references it.
+        Assert.Contains("ShowMenuHook", result.Source);
+
+        // MenuId rides along inside its part exactly once (not also inlined standalone).
+        var menuIds = root.DescendantNodes().OfType<TypeDeclarationSyntax>()
+            .Where(t => t.Identifier.Text == "MenuId").ToList();
+        Assert.Single(menuIds);
     }
 
     private static string Normalize(string s) =>

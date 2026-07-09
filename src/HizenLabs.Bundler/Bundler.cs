@@ -37,8 +37,11 @@ public sealed record BundleResult(
 /// Merges a plugin source file plus the shared library code it transitively uses into a single
 /// self-contained .cs. Two phases (see docs/transforms.md):
 ///   1. Inline  - reachable shared types are pulled in as <c>private</c> nested members of the
-///                plugin class (tree-shaking; only what's used). The marker base (PluginBase) is
-///                NOT inlined - it is swapped for the platform base in phase 2.
+///                plugin class (tree-shaking; only what's used). A partial shared type is emitted
+///                as one nested partial per source part. Partial parts of the plugin class itself
+///                (its folder is passed as a shared dir) become sibling top-level declarations and
+///                always ship. The marker base (PluginBase) is NOT inlined - it is swapped for the
+///                platform base in phase 2.
 ///   2. Transform - the author's neutral namespace and <c>: PluginBase</c> are rewritten into the
 ///                <c>#if CARBON ... #else ... #endif</c> platform split by the transform pipeline.
 /// Optionally compile-checks the emitted file under Carbon and/or Oxide when ref dirs are given.
@@ -61,25 +64,57 @@ public static class Bundler
             analysisRefs,
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
 
-        // Map every type declared in the shared trees to its declaration - except the marker base
-        // (PluginBase): it resolves to the platform base and is swapped, never inlined.
-        var sharedTypes = new Dictionary<INamedTypeSymbol, TypeDeclarationSyntax>(SymbolEqualityComparer.Default);
+        // The plugin class: first public type in the entry file. Resolved up front so partial
+        // declarations of it found in the shared dirs (the plugin's own folder is passed as one)
+        // can be told apart from genuine shared types.
+        var root = (CompilationUnitSyntax)pluginTree.GetRoot();
+        var pluginType = root.DescendantNodes().OfType<TypeDeclarationSyntax>()
+            .First(td => td.Modifiers.Any(SyntaxKind.PublicKeyword));
+        var pluginSymbol = compilation.GetSemanticModel(pluginTree)
+            .GetDeclaredSymbol(pluginType)?.OriginalDefinition;
+
+        // Map every TOP-LEVEL type declared in the shared trees to its declaration(s) - a partial
+        // type keeps ALL of its parts. Nested types ride along with their container and are never
+        // registered on their own (that would inline them a second time). Excluded:
+        //   - the marker base (PluginBase): swapped for the platform base in phase 2, never inlined;
+        //   - parts of the plugin class itself: collected separately and emitted as sibling
+        //     partials, since nesting them would declare a different type.
+        var sharedTypes = new Dictionary<INamedTypeSymbol, List<TypeDeclarationSyntax>>(SymbolEqualityComparer.Default);
+        var pluginParts = new List<TypeDeclarationSyntax>();
         var sharedNamespaces = new HashSet<string> { opts.MarkerNamespace };
         foreach (var tree in sharedTrees)
         {
+            // The entry file must never come in via a shared dir (it would duplicate the plugin
+            // class). Program.cs filters it too; this guards direct API callers.
+            if (!string.IsNullOrEmpty(tree.FilePath) &&
+                string.Equals(Path.GetFullPath(tree.FilePath), Path.GetFullPath(pluginTree.FilePath), StringComparison.OrdinalIgnoreCase))
+                continue;
+
             var model = compilation.GetSemanticModel(tree);
             foreach (var ns in tree.GetRoot().DescendantNodes().OfType<BaseNamespaceDeclarationSyntax>())
                 sharedNamespaces.Add(ns.Name.ToString());
             foreach (var decl in tree.GetRoot().DescendantNodes().OfType<TypeDeclarationSyntax>())
             {
+                if (decl.Parent is TypeDeclarationSyntax)
+                    continue;
                 if (decl.Identifier.Text == opts.BaseMarker)
                     continue;
-                if (model.GetDeclaredSymbol(decl) is INamedTypeSymbol sym)
-                    sharedTypes[sym.OriginalDefinition] = decl;
+                if (model.GetDeclaredSymbol(decl) is not INamedTypeSymbol sym)
+                    continue;
+                if (pluginSymbol is not null && SymbolEqualityComparer.Default.Equals(sym.OriginalDefinition, pluginSymbol))
+                {
+                    pluginParts.Add(decl);
+                    continue;
+                }
+                if (!sharedTypes.TryGetValue(sym.OriginalDefinition, out var parts))
+                    sharedTypes[sym.OriginalDefinition] = parts = new List<TypeDeclarationSyntax>();
+                parts.Add(decl);
             }
         }
 
-        // Reachability: BFS from the plugin tree through shared type bodies.
+        // Reachability: BFS from the plugin tree (entry + its partial parts) through shared type
+        // bodies. A reference to a nested type marks its OUTERMOST container reachable - members
+        // ride along with the container, matching how registration works above.
         var reachable = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
         var queue = new Queue<INamedTypeSymbol>();
 
@@ -90,39 +125,65 @@ public static class Bundler
                 var info = model.GetSymbolInfo(node);
                 var sym = info.Symbol ?? info.CandidateSymbols.FirstOrDefault();
                 var type = (sym as INamedTypeSymbol ?? sym?.ContainingType)?.OriginalDefinition;
+                while (type?.ContainingType is not null)
+                    type = type.ContainingType.OriginalDefinition;
                 if (type is not null && sharedTypes.ContainsKey(type) && reachable.Add(type))
                     queue.Enqueue(type);
             }
         }
 
         Seed(pluginTree.GetRoot(), compilation.GetSemanticModel(pluginTree));
+        // Plugin parts are part of the plugin, not reachability-gated: a part holding only hook
+        // methods is never referenced by anything, but must still ship. They do seed the BFS.
+        foreach (var part in pluginParts)
+            Seed(part, compilation.GetSemanticModel(part.SyntaxTree));
         while (queue.Count > 0)
         {
             var type = queue.Dequeue();
-            var decl = sharedTypes[type];
-            Seed(decl, compilation.GetSemanticModel(decl.SyntaxTree));
+            foreach (var decl in sharedTypes[type])
+                Seed(decl, compilation.GetSemanticModel(decl.SyntaxTree));
         }
 
-        // Build the bundled compilation unit from the plugin tree.
-        var root = (CompilationUnitSyntax)pluginTree.GetRoot();
-
+        // Inline reachable shared types as private nested members. A partial type is emitted as
+        // one nested partial per source part (nested partial types are legal C#), so each part's
+        // #if regions carry over verbatim - no member-level merging of trees.
         var nested = reachable
             .OrderBy(t => t.Name, StringComparer.Ordinal)
-            .Select(t => MakePrivateNested(sharedTypes[t]))
+            .SelectMany(t => sharedTypes[t]
+                .OrderBy(d => d.SyntaxTree.FilePath, StringComparer.OrdinalIgnoreCase)
+                .Select(MakePrivateNested))
             .ToArray();
 
-        var pluginType = root.DescendantNodes().OfType<TypeDeclarationSyntax>()
-            .First(td => td.Modifiers.Any(SyntaxKind.PublicKeyword));
-        root = root.ReplaceNode(pluginType, pluginType.AddMembers(nested));
+        // The plugin's own partial parts become SIBLING top-level declarations after the entry
+        // class (same type, same namespace) - the entry stays first so the transform pipeline's
+        // "first public type" resolution keeps hitting it.
+        var siblingParts = pluginParts
+            .OrderBy(d => d.SyntaxTree.FilePath, StringComparer.OrdinalIgnoreCase)
+            .Select(d => (MemberDeclarationSyntax)d.WithoutLeadingTrivia())
+            .ToArray();
+
+        var newPluginType = pluginType.AddMembers(nested);
+        if (siblingParts.Length > 0 && pluginType.Parent is BaseNamespaceDeclarationSyntax pluginNs)
+        {
+            root = root.ReplaceNode(pluginNs, pluginNs.ReplaceNode(pluginType, newPluginType).AddMembers(siblingParts));
+        }
+        else
+        {
+            root = root.ReplaceNode(pluginType, newPluginType);
+            if (siblingParts.Length > 0)
+                root = root.AddMembers(siblingParts);
+        }
 
         // Drop usings that pointed at shared namespaces (those types are now nested). The author's
         // own (neutral) namespace is kept - the transform pipeline turns it into the #if split.
         root = RemoveUsings(root, sharedNamespaces);
 
-        // Merge the using directives from the shared files whose types were inlined - a nested
-        // type's body still needs them (e.g. `using System;` for AppDomain) and the plugin file
-        // only carries its own. Shared-namespace usings are excluded like above.
-        root = MergeSharedUsings(root, reachable.Select(t => sharedTypes[t].SyntaxTree), sharedNamespaces);
+        // Merge the using directives from the shared files whose types were inlined (and from the
+        // plugin's own partial part files) - a merged type's body still needs them (e.g. `using
+        // System;` for AppDomain) and the entry file only carries its own. Shared-namespace usings
+        // are excluded like above.
+        var mergedTrees = reachable.SelectMany(t => sharedTypes[t]).Concat(pluginParts).Select(d => d.SyntaxTree);
+        root = MergeSharedUsings(root, mergedTrees, sharedNamespaces);
 
         var inlinedSource = root.NormalizeWhitespace().ToFullString();
         var source = TransformPipeline.Run(inlinedSource, options: opts);

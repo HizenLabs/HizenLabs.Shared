@@ -13,6 +13,7 @@ public static class TransformPipeline
     public static readonly IReadOnlyList<IPluginTransform> Default =
     [
         new BaseClassTransform(),
+        new MarkerAliasTransform(),
         new NamespaceTransform(),
         new VersionTransform(),
     ];

@@ -8,7 +8,9 @@ namespace HizenLabs.Shared;
 /// alias (see MarkerAliasTransform), so the server resolves it to the concrete base.
 /// </summary>
 #if CARBON
-public abstract class PluginBase : CarbonPlugin { }
+public abstract class PluginBase : CarbonPlugin
 #else
-public abstract class PluginBase : RustPlugin { }
+public abstract class PluginBase : RustPlugin
 #endif
+{
+}

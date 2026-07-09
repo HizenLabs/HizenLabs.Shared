@@ -1,12 +1,17 @@
 ﻿using Facepunch;
-using Oxide.Game.Rust.Cui;
 using System;
 
 namespace HizenLabs.Shared.UI;
 
 public partial class Menu : IDisposable, Pool.IPooled
 {
+    #region Fields
+
     private bool _disposed;
+
+    #endregion
+
+    #region Factory
 
     public static Menu Create(PluginBase plugin, string menuId)
     {
@@ -15,24 +20,28 @@ public partial class Menu : IDisposable, Pool.IPooled
         return menu;
     }
 
-    private partial void Init(PluginBase plugin, string menuId);
-
     public static void Close(BasePlayer player, string menuId)
     {
-        CuiHelper.DestroyUi(player, menuId);
+        Oxide.Game.Rust.Cui.CuiHelper.DestroyUi(player, menuId);
     }
+
+    #endregion
+
+    #region Pooling
 
     public void EnterPool()
     {
         EnterPoolCore();
     }
 
-    private partial void EnterPoolCore();
-
     public void LeavePool()
     {
         _disposed = false;
     }
+
+    #endregion
+
+    #region Disposal
 
     public void Dispose()
     {
@@ -45,5 +54,15 @@ public partial class Menu : IDisposable, Pool.IPooled
         Pool.Free(ref menu);
     }
 
+    #endregion
+
+    #region Framework Methods
+
+    private partial void Init(PluginBase plugin, string menuId);
+
+    private partial void EnterPoolCore();
+
     private partial void DisposeCore();
+
+    #endregion
 }

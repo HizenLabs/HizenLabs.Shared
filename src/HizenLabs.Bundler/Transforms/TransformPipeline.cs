@@ -12,7 +12,6 @@ public static class TransformPipeline
     /// <summary>The transforms every plugin goes through, in order.</summary>
     public static readonly IReadOnlyList<IPluginTransform> Default =
     [
-        new BaseClassTransform(),
         new MarkerAliasTransform(),
         new NamespaceTransform(),
         new VersionTransform(),

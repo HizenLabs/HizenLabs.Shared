@@ -40,10 +40,11 @@ public sealed record BundleResult(
 ///                plugin class (tree-shaking; only what's used). A partial shared type is emitted
 ///                as one nested partial per source part. Partial parts of the plugin class itself
 ///                (its folder is passed as a shared dir) become sibling top-level declarations and
-///                always ship. The marker base (PluginBase) is NOT inlined - it is swapped for the
+///                always ship. The marker base (PluginBase) is NOT inlined - it is aliased to the
 ///                platform base in phase 2.
-///   2. Transform - the author's neutral namespace and <c>: PluginBase</c> are rewritten into the
-///                <c>#if CARBON ... #else ... #endif</c> platform split by the transform pipeline.
+///   2. Transform - the transform pipeline rewrites the author's neutral namespace into the
+///                <c>#if CARBON ... #else ... #endif</c> platform split and prepends a
+///                platform-split <c>using PluginBase = ...</c> alias for any marker references.
 /// Optionally compile-checks the emitted file under Carbon and/or Oxide when ref dirs are given.
 /// </summary>
 public static class Bundler

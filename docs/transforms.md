@@ -4,11 +4,13 @@ The bundler turns an authored plugin into the single `.cs` the server loads. It 
 phases:
 
 1. **Inline** - reachable shared types are merged into the plugin class as `private` nested
-   members (reachability tree-shaking). The author's neutral namespace is kept here, and the
-   marker base (`PluginBase`) is deliberately *not* inlined - it is swapped in phase 2. One
-   structural step; lives in `Bundler.cs`.
+   members (reachability tree-shaking). A partial type is emitted as one nested partial per
+   source part; partial parts of the plugin class itself become sibling top-level declarations.
+   The author's neutral namespace is kept here, and the marker base (`PluginBase`) is
+   deliberately *not* inlined - it is aliased in phase 2. One structural step; lives in
+   `Bundler.cs`.
 2. **Transform** - a pipeline of small, independent edits applied to the inlined source. This is
-   where the `#if CARBON` split is produced (namespace, base class, ...). This is the part you
+   where the `#if CARBON` split is produced (namespace, marker alias, ...). This is the part you
    extend.
 
 `Bundler.Bundle` runs both phases and, when given a server's managed references
@@ -53,4 +55,6 @@ have to understand the rest of the bundler to add one.
 ## Worked examples
 
 - `NamespaceTransform` - replaces the file-scoped namespace with the `#if CARBON` split.
-- `BaseClassTransform` - swaps `: PluginBase` for `#if CARBON : CarbonPlugin #else : RustPlugin`.
+- `MarkerAliasTransform` - when the bundle references `PluginBase` anywhere (base list, inlined
+  shared code), prepends a platform-split `using PluginBase = Carbon.Plugins.CarbonPlugin;` /
+  `Oxide.Plugins.RustPlugin;` alias, so `: PluginBase` ships as written.

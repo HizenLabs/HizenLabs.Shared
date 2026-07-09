@@ -50,11 +50,14 @@ Rules that keep this working:
   type* as the plugin class; a second public type would be mistaken for it.
 - **Unreferenced types are dropped.** If a type isn't reached from the plugin, it won't be in the
   output - dead code stays out of the bundle.
-- **Partial-ing the plugin class itself across files is not merged.** The bundler reads a single
-  entry file as the plugin; sibling files are inlined by *reference*, not by partial-merge. So
-  model behavior as separate referenced types, not as partials of the plugin.
-- The marker base `PluginBase` is **swapped, not inlined** - it becomes `CarbonPlugin` / `RustPlugin`
-  via the base-class transform, and its `using HizenLabs.Shared;` is removed.
+- **Partial-ing the plugin class across files works.** Part files in the plugin's folder ship as
+  sibling top-level partial declarations of the plugin class and are never tree-shaken (a part
+  holding only hook methods still ships). Partial shared types keep every part too, emitted as
+  nested partials.
+- The marker base `PluginBase` is **aliased, not inlined** - the bundle keeps `: PluginBase` and
+  prepends a platform-split `using PluginBase = Carbon.Plugins.CarbonPlugin;` /
+  `Oxide.Plugins.RustPlugin;` alias (marker-alias transform); the dev-time
+  `using HizenLabs.Shared;` is removed.
 
 ## Platform-specific behavior
 

@@ -45,15 +45,17 @@ public class BundlerTests
         Assert.Equal(new[] { "FooService", "TextBox" }, result.InlinedTypes);
         Assert.DoesNotContain("UnusedHelper", result.Source);
 
-        // The platform split is present for both the namespace and the base class.
+        // The platform split is present for both the namespace and the marker alias.
         Assert.Contains("#if CARBON", result.Source);
         Assert.Contains("namespace Carbon.Plugins;", result.Source);
         Assert.Contains("namespace Oxide.Plugins;", result.Source);
-        Assert.Contains("CarbonPlugin", result.Source);
-        Assert.Contains("RustPlugin", result.Source);
+        Assert.Contains("using PluginBase = Carbon.Plugins.CarbonPlugin;", result.Source);
+        Assert.Contains("using PluginBase = Oxide.Plugins.RustPlugin;", result.Source);
 
-        // The marker base and its import are gone (swapped, not inlined).
-        Assert.DoesNotContain(": PluginBase", result.Source);
+        // The base list ships as written (the alias resolves it); the marker class itself and its
+        // dev-time import are gone.
+        Assert.Contains(": PluginBase", result.Source);
+        Assert.DoesNotContain("class PluginBase", result.Source);
         Assert.DoesNotContain("using HizenLabs", result.Source);
 
         // Usings from inlined shared files are merged in (FooService needs System for AppDomain);

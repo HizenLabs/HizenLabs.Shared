@@ -15,8 +15,9 @@ public static class MenuTheme
     public static readonly Color BodyText = new(0.85f, 0.85f, 0.85f, 1f);
 
     public static readonly Color WindowBackground = new(0f, 0f, 0f, 1f);
+    public static readonly Color Backdrop = new(0f, 0f, 0f, 0.72f);
     public static readonly Color Border = new(0.388f, 0.388f, 0.388f, 1f);
-    public static readonly Color MutedText = new(0.388f, 0.388f, 0.388f, 1f);
+    public static readonly Color MutedText = new(0.43f, 0.43f, 0.43f, 1f);
     public static readonly Color Watermark = new(0.388f, 0.388f, 0.388f, 0.2f);
 
     public static readonly Color ButtonBackground = new(0.173f, 0.173f, 0.173f, 1f);

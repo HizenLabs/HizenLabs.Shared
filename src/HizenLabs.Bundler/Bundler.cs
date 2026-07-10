@@ -82,7 +82,7 @@ public static class Bundler
         //   - the marker base (PluginBase): swapped for the platform base in phase 2, never inlined;
         //   - parts of the plugin class itself: collected separately and emitted as sibling
         //     partials, since nesting them would declare a different type.
-        var sharedTypes = new Dictionary<INamedTypeSymbol, List<TypeDeclarationSyntax>>(SymbolEqualityComparer.Default);
+        var sharedTypes = new Dictionary<INamedTypeSymbol, List<BaseTypeDeclarationSyntax>>(SymbolEqualityComparer.Default);
         var pluginParts = new List<TypeDeclarationSyntax>();
         var sharedNamespaces = new HashSet<string> { opts.MarkerNamespace };
         foreach (var tree in sharedTrees)
@@ -96,7 +96,9 @@ public static class Bundler
             var model = compilation.GetSemanticModel(tree);
             foreach (var ns in tree.GetRoot().DescendantNodes().OfType<BaseNamespaceDeclarationSyntax>())
                 sharedNamespaces.Add(ns.Name.ToString());
-            foreach (var decl in tree.GetRoot().DescendantNodes().OfType<TypeDeclarationSyntax>())
+            // BaseTypeDeclarationSyntax, not TypeDeclarationSyntax: enums are types too and
+            // must inline like everything else.
+            foreach (var decl in tree.GetRoot().DescendantNodes().OfType<BaseTypeDeclarationSyntax>())
             {
                 if (decl.Parent is TypeDeclarationSyntax)
                     continue;
@@ -106,11 +108,12 @@ public static class Bundler
                     continue;
                 if (pluginSymbol is not null && SymbolEqualityComparer.Default.Equals(sym.OriginalDefinition, pluginSymbol))
                 {
-                    pluginParts.Add(decl);
+                    if (decl is TypeDeclarationSyntax pluginPart)
+                        pluginParts.Add(pluginPart);
                     continue;
                 }
                 if (!sharedTypes.TryGetValue(sym.OriginalDefinition, out var parts))
-                    sharedTypes[sym.OriginalDefinition] = parts = new List<TypeDeclarationSyntax>();
+                    sharedTypes[sym.OriginalDefinition] = parts = new List<BaseTypeDeclarationSyntax>();
                 parts.Add(decl);
             }
         }
@@ -203,11 +206,13 @@ public static class Bundler
         // ShakeMethods). Runs on the original declarations so labels/ordering below still see
         // the original trees; the map carries original -> shaken.
         var shakenMembers = new List<string>();
-        var shakenMap = new Dictionary<TypeDeclarationSyntax, TypeDeclarationSyntax>();
+        var shakenMap = new Dictionary<BaseTypeDeclarationSyntax, BaseTypeDeclarationSyntax>();
         foreach (var type in reachable)
         {
             foreach (var decl in sharedTypes[type])
-                shakenMap[decl] = ShakeMethods(decl, compilation.GetSemanticModel(decl.SyntaxTree), usedMembers, disabledNames, shakenMembers);
+                shakenMap[decl] = decl is TypeDeclarationSyntax typeDecl
+                    ? ShakeMethods(typeDecl, compilation.GetSemanticModel(decl.SyntaxTree), usedMembers, disabledNames, shakenMembers)
+                    : decl;
         }
 
         // Inline reachable shared types as private nested members. A partial type's parts are
@@ -216,7 +221,7 @@ public static class Bundler
         // part bodies so #if regions carry over verbatim. When a part's directives make the merge
         // unsafe (unbalanced inside the body, or wrapping the declaration itself), the type falls
         // back to one nested partial per part - still-correct output, just less pretty.
-        string? Label(TypeDeclarationSyntax d) => req.PartRegions ? PartLabel(d) : null;
+        string? Label(BaseTypeDeclarationSyntax d) => req.PartRegions ? PartLabel(d) : null;
 
         var nested = reachable
             .OrderBy(t => t.Name, StringComparer.Ordinal)
@@ -228,8 +233,10 @@ public static class Bundler
                     .ToList();
                 if (parts.Count == 1)
                     return new[] { shakenMap[parts[0]] };
-                var merged = MergeParts(parts.Select(d => (shakenMap[d], Label(d))).ToList());
-                return merged is not null ? new[] { merged } : parts.Select(d => shakenMap[d]).ToArray();
+                var merged = parts.All(d => shakenMap[d] is TypeDeclarationSyntax)
+                    ? MergeParts(parts.Select(d => ((TypeDeclarationSyntax)shakenMap[d], Label(d))).ToList())
+                    : null;
+                return merged is not null ? new[] { (BaseTypeDeclarationSyntax)merged } : parts.Select(d => shakenMap[d]).ToArray();
             })
             .Select(MakePrivateNested)
             .ToArray();
@@ -405,7 +412,7 @@ public static class Bundler
 
     /// <summary>Provenance label for a merged part: the last two path segments of its source file
     /// (e.g. "UI/Menu.Carbon.cs"), shown as a #region around the part's content.</summary>
-    private static string PartLabel(TypeDeclarationSyntax decl)
+    private static string PartLabel(BaseTypeDeclarationSyntax decl)
     {
         var path = decl.SyntaxTree.FilePath;
         if (string.IsNullOrEmpty(path))
@@ -516,7 +523,7 @@ public static class Bundler
         return ifDepth == 0 && regionDepth == 0;
     }
 
-    private static TypeDeclarationSyntax MakePrivateNested(TypeDeclarationSyntax type)
+    private static MemberDeclarationSyntax MakePrivateNested(BaseTypeDeclarationSyntax type)
     {
         var keep = type.Modifiers.Where(m =>
             !m.IsKind(SyntaxKind.PublicKeyword) &&
@@ -526,7 +533,12 @@ public static class Bundler
             !m.IsKind(SyntaxKind.FileKeyword));
 
         var modifiers = TokenList(Token(SyntaxKind.PrivateKeyword)).AddRange(keep);
-        return type.WithModifiers(modifiers).WithoutLeadingTrivia();
+        return type switch
+        {
+            TypeDeclarationSyntax t => t.WithModifiers(modifiers).WithoutLeadingTrivia(),
+            EnumDeclarationSyntax e => e.WithModifiers(modifiers).WithoutLeadingTrivia(),
+            _ => type.WithoutLeadingTrivia(),
+        };
     }
 
     private static CompilationUnitSyntax RemoveUsings(CompilationUnitSyntax root, HashSet<string> sharedNamespaces)
@@ -586,6 +598,9 @@ public static class Bundler
             {
                 var name = Path.GetFileName(dll);
                 if (byName.ContainsKey(name)) continue;
+                // Oxide.References embeds a PUBLIC copy of Newtonsoft.Json that clashes with the
+                // game's own Newtonsoft.Json.dll (CS0433 on every [JsonProperty]).
+                if (name.Equals("Oxide.References.dll", StringComparison.OrdinalIgnoreCase)) continue;
                 if (!IsManagedAssembly(dll)) continue; // skip native PE (e.g. EnterpriseServices thunks)
                 byName[name] = dll;
                 if (name.Equals("mscorlib.dll", StringComparison.OrdinalIgnoreCase)) hasCorlib = true;

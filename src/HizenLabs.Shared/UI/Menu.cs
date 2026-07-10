@@ -3,9 +3,6 @@ using Network;
 using System;
 using System.Text;
 using UnityEngine;
-// Facepunch also declares an ArrayPool<T>; alias the BCL ones to keep references unambiguous.
-using CharPool = System.Buffers.ArrayPool<char>;
-using BytePool = System.Buffers.ArrayPool<byte>;
 
 namespace HizenLabs.Shared.UI;
 
@@ -27,6 +24,11 @@ public class Menu : IDisposable, Pool.IPooled
 {
     #region Fields
 
+    // Scratch buffers for the send path. They ride the pooled Menu instance (grown on demand,
+    // never shrunk), because the BCL ArrayPool is unusable here: Oxide's ref set makes
+    // System.Buffers inaccessible and Facepunch's ArrayPool has fixed bucket semantics.
+    private char[] _chars = new char[512];
+    private byte[] _bytes = new byte[1536];
     private StringBuilder _sb;
     private bool _disposed;
     private string _prefix;
@@ -98,34 +100,38 @@ public class Menu : IDisposable, Pool.IPooled
         // buffers.
         if (_layout is not null)
         {
-            SendBytes(player.net.connection, _layout.Bytes, _layout.Bytes.Length);
+            SendPayload(player.net.connection, _layout.Bytes, _layout.Bytes.Length);
         }
 
         if (_count > 0)
         {
             _sb.Append(']');
             var length = _sb.Length;
-            var chars = CharPool.Shared.Rent(length);
-            _sb.CopyTo(0, chars, 0, length);
-            var bytes = BytePool.Shared.Rent(Encoding.UTF8.GetMaxByteCount(length));
-            var size = Encoding.UTF8.GetBytes(chars, 0, length, bytes, 0);
-            SendBytes(player.net.connection, bytes, size);
-            CharPool.Shared.Return(chars);
-            BytePool.Shared.Return(bytes);
+            if (_chars.Length < length)
+                _chars = new char[Math.Max(length, _chars.Length * 2)];
+            _sb.CopyTo(0, _chars, 0, length);
+            var maxBytes = Encoding.UTF8.GetMaxByteCount(length);
+            if (_bytes.Length < maxBytes)
+                _bytes = new byte[Math.Max(maxBytes, _bytes.Length * 2)];
+            var size = Encoding.UTF8.GetBytes(_chars, 0, length, _bytes, 0);
+            SendPayload(player.net.connection, _bytes, size);
             _sb.Length--; // reopen the array so the same menu can send to more players
         }
     }
 
-    // The same wire write LUI does: an RPCMessage on the community entity carrying the payload
-    // with an explicit size (the span overload, so a rented buffer's slack never hits the wire).
-    // Pure game API, identical on Carbon and Oxide.
-    internal static void SendBytes(Connection connection, byte[] bytes, int size)
+    // The same wire write LUI does: an RPCMessage on the community entity carrying the payload.
+    // The length prefix + raw bytes IS BytesWithSize(span, variableLength: false) - written by
+    // hand because the game's span types live in its netstandard facade, which a net48 dev
+    // compile cannot import, making every BytesWithSize overload uncallable here. NetWrite is a
+    // Stream, so the byte window writes directly. Pure game API, identical on Carbon and Oxide.
+    internal static void SendPayload(Connection connection, byte[] bytes, int size)
     {
         var write = Net.sv.StartWrite();
         write.PacketID(Message.Type.RPCMessage);
         write.EntityID(CommunityEntity.ServerInstance.net.ID);
         write.UInt32(_addUiRpc);
-        write.BytesWithSize(new ReadOnlySpan<byte>(bytes, 0, size));
+        write.UInt32((uint)size);
+        write.Write(bytes, 0, size);
         write.Send(new SendInfo(connection));
     }
 

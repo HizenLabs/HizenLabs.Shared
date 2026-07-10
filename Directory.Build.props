@@ -44,7 +44,7 @@
            had no Microsoft.* either. -->
   <ItemGroup Condition="'$(TargetFramework)' == 'net48' AND '$(ReferenceRustAssemblies)' == 'true'">
     <Reference Include="$(RustManagedDir)/*.dll"
-               Exclude="$(RustManagedDir)/System*.dll;$(RustManagedDir)/mscorlib.dll;$(RustManagedDir)/netstandard.dll;$(RustManagedDir)/Mono.*.dll;$(RustManagedDir)/Microsoft.*.dll;$(RustManagedDir)/I18N*.dll">
+               Exclude="$(RustManagedDir)/System*.dll;$(RustManagedDir)/mscorlib.dll;$(RustManagedDir)/netstandard.dll;$(RustManagedDir)/Mono.*.dll;$(RustManagedDir)/Microsoft.*.dll;$(RustManagedDir)/I18N*.dll;$(RustManagedDir)/Oxide.References.dll">
       <Private>false</Private>
     </Reference>
   </ItemGroup>

@@ -1,6 +1,7 @@
+using HizenLabs.Shared.UI;
 using System.Collections.Generic;
 
-namespace HizenLabs.Shared.UI;
+namespace HizenLabs.Shared.UI.Layouts;
 
 /// <summary>
 /// A centered confirmation dialog: message area plus confirm/cancel button slots. The shell (the

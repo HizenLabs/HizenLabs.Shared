@@ -1,13 +1,7 @@
+using HizenLabs.Shared.UI;
 using System.Collections.Generic;
 
-namespace HizenLabs.Shared.UI;
-
-public enum MenuSize
-{
-    Small,
-    Medium,
-    Large,
-}
+namespace HizenLabs.Shared.UI.Layouts;
 
 /// <summary>
 /// The general-purpose full menu: centered frame with header, content, and footer sections.

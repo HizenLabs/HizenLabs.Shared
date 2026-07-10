@@ -1,7 +1,8 @@
+using HizenLabs.Shared.UI;
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace HizenLabs.Shared.UI;
+namespace HizenLabs.Shared.UI.Layouts;
 
 /// <summary>
 /// The application-window look: a tall centered frame (1152 wide, screen height minus margins)

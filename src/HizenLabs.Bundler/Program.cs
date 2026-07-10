@@ -92,6 +92,8 @@ static int Bundle(string[] args)
     }
 
     Console.Error.WriteLine($"[bundler] {Path.GetFileName(plugin)} v{resolved}: inlined {result.InlinedTypes.Count} shared type(s): {string.Join(", ", result.InlinedTypes)}");
+    if (result.ShakenMembers is { Count: > 0 } shakenMembers)
+        Console.Error.WriteLine($"[bundler] shook {shakenMembers.Count} unused member(s): {string.Join(", ", shakenMembers)}");
 
     if (!result.Checked)
     {

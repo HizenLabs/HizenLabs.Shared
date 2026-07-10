@@ -42,19 +42,17 @@ public partial class Menu
     #endregion
 
     #region Containers
-    public MenuContainer CreatePanel(
-        Layer layer,
-        LuiPosition position,
-        LuiOffset offset,
-        string color,
-        string name = "",
-        bool needsCursor = false,
-        bool needsKeyboard = false)
-    {
-        var parent = _cui.v2.CreateParent((CUI.ClientPanels)layer, position, name);
-        var container = new MenuContainer(parent);
 
-        return CreatePanel(container, position, offset, color, name, needsCursor, needsKeyboard);
+    /// <summary>
+    /// The menu's root attach point on a client layer. Name it the menu id so closing the menu
+    /// destroys the whole tree. Element names are the client-side handles that updates (and the
+    /// Oxide implementation) address elements by - use stable constants, not per-send strings.
+    /// </summary>
+    public MenuContainer CreateParent(Layer layer, LuiPosition position, string name)
+    {
+        var container = _cui.v2.CreateParent((CUI.ClientPanels)layer, position, name);
+
+        return new MenuContainer(container);
     }
 
     public MenuContainer CreatePanel(
@@ -68,8 +66,9 @@ public partial class Menu
     {
         var container = _cui.v2.CreatePanel(
             parent.Container,
+            position,
             offset,
-            color,
+            MenuColor.Normalize(color),
             name);
 
         if (needsCursor)
@@ -94,7 +93,7 @@ public partial class Menu
         var container = _cui.v2.Update(panelId);
 
         container.SetAnchorAndOffset(position, offset);
-        container.SetColor(color);
+        container.SetColor(MenuColor.Normalize(color));
 
         return new(container);
     }

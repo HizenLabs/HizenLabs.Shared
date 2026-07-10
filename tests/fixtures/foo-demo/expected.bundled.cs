@@ -26,7 +26,6 @@ public class FooPlugin : PluginBase
     private static class FooService
     {
         public static string Greeting(string name) => TextBox.Frame($"foo says hi, {name}");
-        public static string Domain() => AppDomain.CurrentDomain.FriendlyName;
     }
 
     private static class TextBox

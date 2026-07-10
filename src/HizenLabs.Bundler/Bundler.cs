@@ -25,7 +25,8 @@ public sealed record PlatformCheck(string Platform, IReadOnlyList<Diagnostic> Er
 public sealed record BundleResult(
     string Source,
     IReadOnlyList<string> InlinedTypes,
-    IReadOnlyList<PlatformCheck> Checks)
+    IReadOnlyList<PlatformCheck> Checks,
+    IReadOnlyList<string>? ShakenMembers = null)
 {
     /// <summary>True if every check that ran passed. Vacuously true when no refs were supplied.</summary>
     public bool Compiles => Checks.All(c => c.Compiles);
@@ -116,16 +117,47 @@ public static class Bundler
 
         // Reachability: BFS from the plugin tree (entry + its partial parts) through shared type
         // bodies. A reference to a nested type marks its OUTERMOST container reachable - members
-        // ride along with the container, matching how registration works above.
+        // ride along with the container, matching how registration works above. The same walk
+        // records every referenced member symbol (all candidates, so method groups and nameof
+        // count) - that usage set drives member-level shaking of the inlined types below.
         var reachable = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
         var queue = new Queue<INamedTypeSymbol>();
+        var usedMembers = new HashSet<ISymbol>(SymbolEqualityComparer.Default);
+        // Identifier-ish tokens inside inactive #if regions (disabled text is invisible to the
+        // semantic model): any member whose name appears there is kept, so code that only runs
+        // under the OTHER platform's defines can't get its dependencies shaken away.
+        var disabledNames = new HashSet<string>(StringComparer.Ordinal);
+
+        void RecordMember(ISymbol symbol)
+        {
+            switch (symbol)
+            {
+                case IMethodSymbol method:
+                    usedMembers.Add(method.OriginalDefinition);
+                    if (method.ReducedFrom is not null)
+                        usedMembers.Add(method.ReducedFrom.OriginalDefinition);
+                    break;
+                case IPropertySymbol or IFieldSymbol or IEventSymbol:
+                    usedMembers.Add(symbol.OriginalDefinition);
+                    break;
+            }
+        }
 
         void Seed(SyntaxNode scope, SemanticModel model)
         {
+            foreach (var trivia in scope.DescendantTrivia(descendIntoTrivia: true))
+            {
+                if (trivia.IsKind(SyntaxKind.DisabledTextTrivia))
+                    HarvestIdentifiers(trivia.ToString(), disabledNames);
+            }
             foreach (var node in scope.DescendantNodesAndSelf())
             {
                 var info = model.GetSymbolInfo(node);
                 var sym = info.Symbol ?? info.CandidateSymbols.FirstOrDefault();
+                if (info.Symbol is not null)
+                    RecordMember(info.Symbol);
+                foreach (var candidate in info.CandidateSymbols)
+                    RecordMember(candidate);
                 var type = (sym as INamedTypeSymbol ?? sym?.ContainingType)?.OriginalDefinition;
                 while (type?.ContainingType is not null)
                     type = type.ContainingType.OriginalDefinition;
@@ -139,11 +171,43 @@ public static class Bundler
         // methods is never referenced by anything, but must still ship. They do seed the BFS.
         foreach (var part in pluginParts)
             Seed(part, compilation.GetSemanticModel(part.SyntaxTree));
-        while (queue.Count > 0)
+        while (true)
         {
-            var type = queue.Dequeue();
+            while (queue.Count > 0)
+            {
+                var type = queue.Dequeue();
+                foreach (var decl in sharedTypes[type])
+                    Seed(decl, compilation.GetSemanticModel(decl.SyntaxTree));
+            }
+
+            // Disabled #if regions are invisible to the semantic model, but the other platform
+            // still compiles them on the server - a shared type referenced ONLY there (e.g. a
+            // helper used solely by a #if CARBON body) must still inline. Names harvested from
+            // disabled text pull matching types in; new types can expose new disabled regions,
+            // so sweep to a fixpoint.
+            var added = false;
+            foreach (var type in sharedTypes.Keys)
+            {
+                if (disabledNames.Contains(type.Name) && reachable.Add(type))
+                {
+                    queue.Enqueue(type);
+                    added = true;
+                }
+            }
+            if (!added)
+                break;
+        }
+
+        // Member shaking: drop methods of inlined shared types that nothing reachable uses.
+        // Deliberately conservative - a method is kept on ANY sign it might be needed (see
+        // ShakeMethods). Runs on the original declarations so labels/ordering below still see
+        // the original trees; the map carries original -> shaken.
+        var shakenMembers = new List<string>();
+        var shakenMap = new Dictionary<TypeDeclarationSyntax, TypeDeclarationSyntax>();
+        foreach (var type in reachable)
+        {
             foreach (var decl in sharedTypes[type])
-                Seed(decl, compilation.GetSemanticModel(decl.SyntaxTree));
+                shakenMap[decl] = ShakeMethods(decl, compilation.GetSemanticModel(decl.SyntaxTree), usedMembers, disabledNames, shakenMembers);
         }
 
         // Inline reachable shared types as private nested members. A partial type's parts are
@@ -163,9 +227,9 @@ public static class Bundler
                     .ThenBy(d => d.SyntaxTree.FilePath, StringComparer.OrdinalIgnoreCase)
                     .ToList();
                 if (parts.Count == 1)
-                    return new[] { parts[0] };
-                var merged = MergeParts(parts.Select(d => (d, Label(d))).ToList());
-                return merged is not null ? new[] { merged } : parts.ToArray();
+                    return new[] { shakenMap[parts[0]] };
+                var merged = MergeParts(parts.Select(d => (shakenMap[d], Label(d))).ToList());
+                return merged is not null ? new[] { merged } : parts.Select(d => shakenMap[d]).ToArray();
             })
             .Select(MakePrivateNested)
             .ToArray();
@@ -220,7 +284,103 @@ public static class Bundler
             checks.Add(Check("Oxide", source, oxide, defineCarbon: false));
 
         var inlined = reachable.Select(t => t.Name).OrderBy(n => n, StringComparer.Ordinal).ToList();
-        return new BundleResult(source, inlined, checks);
+        shakenMembers.Sort(StringComparer.Ordinal);
+        return new BundleResult(source, inlined, checks, shakenMembers);
+    }
+
+    /// <summary>
+    /// Removes methods of an inlined shared type that nothing reachable references. Conservative
+    /// by design - a method is KEPT when any of these hold:
+    ///   - its symbol is in the usage set (any reference, method group, or nameof);
+    ///   - its name appears inside disabled #if text anywhere in play (the other platform's code
+    ///     is invisible to the semantic model but still compiles on the server);
+    ///   - it carries attributes, is partial/virtual/override/abstract, or explicitly implements
+    ///     an interface member;
+    ///   - an interface the type implements declares a member with its name (Dispose, EnterPool,
+    ///     ... - covers implicit implementations and pattern-based calls like 'using');
+    ///   - the type's base list has an entry the analysis compilation can't resolve (unknown
+    ///     contract, e.g. a game interface with no refs loaded): public methods are kept;
+    ///   - preprocessor directives live anywhere in its span (removing it would unbalance them).
+    /// </summary>
+    private static TypeDeclarationSyntax ShakeMethods(
+        TypeDeclarationSyntax decl, SemanticModel model,
+        HashSet<ISymbol> usedMembers, HashSet<string> disabledNames, List<string> shaken)
+    {
+        var remove = new List<MethodDeclarationSyntax>();
+        foreach (var method in decl.DescendantNodes().OfType<MethodDeclarationSyntax>())
+        {
+            // Interface members define the contract implementations are kept by - never shake
+            // them (call sites resolve to the implementing class, leaving these falsely unused).
+            if (method.Parent is InterfaceDeclarationSyntax)
+                continue;
+            if (method.AttributeLists.Count > 0 || method.ExplicitInterfaceSpecifier is not null)
+                continue;
+            if (method.Modifiers.Any(m =>
+                    m.IsKind(SyntaxKind.PartialKeyword) || m.IsKind(SyntaxKind.VirtualKeyword) ||
+                    m.IsKind(SyntaxKind.OverrideKeyword) || m.IsKind(SyntaxKind.AbstractKeyword)))
+                continue;
+            if (disabledNames.Contains(method.Identifier.Text))
+                continue;
+            if (model.GetDeclaredSymbol(method) is not IMethodSymbol symbol)
+                continue;
+            if (usedMembers.Contains(symbol.OriginalDefinition))
+                continue;
+
+            var type = symbol.ContainingType;
+            if (type.AllInterfaces.Any(i => i.MemberNames.Contains(method.Identifier.Text)))
+                continue;
+            if (symbol.DeclaredAccessibility == Accessibility.Public && HasUnresolvedBase(type, model))
+                continue;
+            if (method.DescendantTrivia(descendIntoTrivia: true).Any(t => t.IsDirective) ||
+                method.GetLeadingTrivia().Any(t => t.IsDirective) ||
+                method.GetTrailingTrivia().Any(t => t.IsDirective))
+                continue;
+
+            remove.Add(method);
+            shaken.Add($"{type.Name}.{method.Identifier.Text}");
+        }
+        return remove.Count == 0 ? decl : decl.RemoveNodes(remove, SyntaxRemoveOptions.KeepNoTrivia)!;
+    }
+
+    /// <summary>True if any base-list entry on any part of the type fails to resolve in the
+    /// analysis compilation - the contract is unknown, so the type's public surface stays.</summary>
+    private static bool HasUnresolvedBase(INamedTypeSymbol type, SemanticModel model)
+    {
+        foreach (var reference in type.DeclaringSyntaxReferences)
+        {
+            if (reference.GetSyntax() is not TypeDeclarationSyntax part || part.BaseList is null)
+                continue;
+            // A part can live in a different tree than the model we hold; resolve per-tree.
+            var partModel = model.SyntaxTree == part.SyntaxTree
+                ? model
+                : model.Compilation.GetSemanticModel(part.SyntaxTree);
+            foreach (var baseType in part.BaseList.Types)
+            {
+                var info = partModel.GetSymbolInfo(baseType.Type);
+                if (info.Symbol is null && info.CandidateSymbols.IsDefaultOrEmpty)
+                    return true;
+            }
+        }
+        return false;
+    }
+
+    private static void HarvestIdentifiers(string text, HashSet<string> names)
+    {
+        var i = 0;
+        while (i < text.Length)
+        {
+            if (char.IsLetter(text[i]) || text[i] == '_')
+            {
+                var start = i;
+                while (i < text.Length && (char.IsLetterOrDigit(text[i]) || text[i] == '_'))
+                    i++;
+                names.Add(text.Substring(start, i - start));
+            }
+            else
+            {
+                i++;
+            }
+        }
     }
 
     private static PlatformCheck Check(string platform, string source, IReadOnlyList<string> refDirs, bool defineCarbon)

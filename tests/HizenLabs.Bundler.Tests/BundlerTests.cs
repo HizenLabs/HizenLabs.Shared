@@ -150,6 +150,31 @@ public class BundlerTests
         Assert.Contains("CarbonOnly", result.Source);
     }
 
+    // ---- shake-demo: member-level shaking of inlined shared types ----
+
+    [Fact]
+    public void Unused_members_of_inlined_types_are_shaken_with_conservative_keeps()
+    {
+        var dir = Path.Combine(AppContext.BaseDirectory, "fixtures", "shake-demo");
+        var plugin = Path.Combine(dir, "ShakePlugin.cs");
+        var shared = Directory.EnumerateFiles(Path.Combine(dir, "shared"), "*.cs", SearchOption.AllDirectories).ToList();
+
+        var result = Bundler.Bundle(new BundleRequest(plugin, shared));
+
+        // Referenced members survive; dead ones are dropped (public and private alike).
+        Assert.Contains("Used", result.Source);
+        Assert.DoesNotContain("Unused", result.Source);
+        Assert.DoesNotContain("Extra", result.Source);
+        Assert.DoesNotContain("Hidden", result.Source);
+        Assert.Equal(new[] { "Helper.Unused", "Widget.Extra", "Widget.Hidden" }, result.ShakenMembers);
+
+        // Interface members are kept even without an explicit call site (Dispose/EnterPool
+        // pattern), and members referenced only inside a disabled #if region survive - the other
+        // platform still compiles that code on the server.
+        Assert.Contains("public void Do()", result.Source);
+        Assert.Contains("CarbonSide", result.Source);
+    }
+
     private static string Normalize(string s) =>
         string.Join('\n', s.Replace("\r\n", "\n").Split('\n').Select(l => l.TrimEnd())).TrimEnd();
 }

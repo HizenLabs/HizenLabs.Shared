@@ -78,8 +78,6 @@ public readonly struct AppLayout
         if (_shells.TryGetValue(key, out var shell))
             return shell;
 
-        var main = menuId + ".main";
-        var backdrop = menuId + ".backdrop";
         shell = new Shell
         {
             Header = menuId + ".header",
@@ -89,71 +87,35 @@ public readonly struct AppLayout
             Summary = menuId + ".summary",
         };
 
-        var sb = MenuShell.Begin();
-        var count = 0;
+        shell.Payload = MenuShell.Build(menuId, menu =>
+        {
+            // Root: the destroy anchor spanning the layer, dimmed backdrop with the cursor.
+            var root = menu.CreateParent(layer, MenuPosition.Full, menuId);
+            var backdrop = root.AddPanel(MenuPosition.Full, MenuOffset.Zero, MenuTheme.Backdrop, needsCursor: true);
 
-        // Root: the destroy anchor spanning the layer.
-        MenuJson.BeginElement(sb, ref count, menuId, Menu.LayerName(layer), update: false);
-        MenuJson.Rect(sb, MenuPosition.Full, MenuOffset.Zero);
-        MenuJson.EndElement(sb);
+            // Main window: centered, fixed 1066.67 x 622.22, bordered frame.
+            var window = backdrop.AddPanel(MenuPosition.Center, new MenuOffset(-533.33f, -311.11f, 533.33f, 311.11f), MenuTheme.WindowBackground);
 
-        // Dimmed backdrop behind the window; carries the cursor.
-        MenuJson.BeginElement(sb, ref count, backdrop, menuId, update: false);
-        MenuJson.Rect(sb, MenuPosition.Full, MenuOffset.Zero);
-        MenuJson.Image(sb, MenuTheme.Backdrop);
-        MenuJson.Cursor(sb);
-        MenuJson.EndElement(sb);
+            // Header strip: title + summary slots, bottom divider, close button.
+            var header = window.AddContainer(new MenuPosition(0f, 1f, 1f, 1f), new MenuOffset(0f, -54.44f, 0f, 0f), shell.Header);
+            header.AddContainer(new MenuPosition(0f, 0f, 0f, 1f), new MenuOffset(20f, 0f, 210f, 0f), shell.Title);
+            header.AddContainer(new MenuPosition(0f, 0f, 0f, 1f), new MenuOffset(217.78f, 0f, 551.11f, 0f), shell.Summary);
+            header.AddPanel(new MenuPosition(0f, 0f, 1f, 0f), new MenuOffset(0f, 0f, 0f, 1f), MenuTheme.Border);
+            if (closeButton)
+                header.AddCloseButton(closeTarget: menuId, barHeight: 54.44f);
 
-        // Main window: centered, fixed 1066.67 x 622.22.
-        MenuJson.BeginElement(sb, ref count, main, backdrop, update: false);
-        MenuJson.Rect(sb, MenuPosition.Center, new MenuOffset(-533.33f, -311.11f, 533.33f, 311.11f));
-        MenuJson.Image(sb, MenuTheme.WindowBackground);
-        MenuJson.EndElement(sb);
+            // Content between the bars (pure container - children paint it).
+            window.AddContainer(MenuPosition.Full, new MenuOffset(0f, 45.56f, 0f, -54.44f), shell.Content);
 
-        // Header strip: title + summary slots, bottom divider, close button.
-        MenuJson.BeginElement(sb, ref count, shell.Header, main, update: false);
-        MenuJson.Rect(sb, new MenuPosition(0f, 1f, 1f, 1f), new MenuOffset(0f, -54.44f, 0f, 0f));
-        MenuJson.EndElement(sb);
+            // Footer strip: top divider + watermark; page/status labels are per-open.
+            var footer = window.AddContainer(new MenuPosition(0f, 0f, 1f, 0f), new MenuOffset(0f, 0f, 0f, 45.56f), shell.Footer);
+            footer.AddPanel(new MenuPosition(0f, 1f, 1f, 1f), new MenuOffset(0f, -1f, 0f, 0f), MenuTheme.Border);
+            footer.AddText(new MenuPosition(0.5f, 0f, 0.5f, 1f), new MenuOffset(-66.67f, 0f, 66.67f, 0f),
+                "hizen.dev", 13, MenuTheme.Watermark, TextAnchor.MiddleCenter, MenuFont.Poxel);
 
-        MenuJson.BeginElement(sb, ref count, shell.Title, shell.Header, update: false);
-        MenuJson.Rect(sb, new MenuPosition(0f, 0f, 0f, 1f), new MenuOffset(20f, 0f, 210f, 0f));
-        MenuJson.EndElement(sb);
+            window.AddBorders(MenuTheme.Border);
+        });
 
-        MenuJson.BeginElement(sb, ref count, shell.Summary, shell.Header, update: false);
-        MenuJson.Rect(sb, new MenuPosition(0f, 0f, 0f, 1f), new MenuOffset(217.78f, 0f, 551.11f, 0f));
-        MenuJson.EndElement(sb);
-
-        MenuJson.BeginElement(sb, ref count, shell.Header + ".divider", shell.Header, update: false);
-        MenuJson.Rect(sb, new MenuPosition(0f, 0f, 1f, 0f), new MenuOffset(0f, 0f, 0f, 1f));
-        MenuJson.Image(sb, MenuTheme.Border);
-        MenuJson.EndElement(sb);
-
-        if (closeButton)
-            MenuShell.CloseButton(sb, ref count, shell.Header, closeTarget: menuId, barHeight: 54.44f);
-
-        // Content between header and footer (pure container - children paint it).
-        MenuJson.BeginElement(sb, ref count, shell.Content, main, update: false);
-        MenuJson.Rect(sb, MenuPosition.Full, new MenuOffset(0f, 45.56f, 0f, -54.44f));
-        MenuJson.EndElement(sb);
-
-        // Footer strip: top divider + watermark; page/status labels are per-open via the scope.
-        MenuJson.BeginElement(sb, ref count, shell.Footer, main, update: false);
-        MenuJson.Rect(sb, new MenuPosition(0f, 0f, 1f, 0f), new MenuOffset(0f, 0f, 0f, 45.56f));
-        MenuJson.EndElement(sb);
-
-        MenuJson.BeginElement(sb, ref count, shell.Footer + ".divider", shell.Footer, update: false);
-        MenuJson.Rect(sb, new MenuPosition(0f, 1f, 1f, 1f), new MenuOffset(0f, -1f, 0f, 0f));
-        MenuJson.Image(sb, MenuTheme.Border);
-        MenuJson.EndElement(sb);
-
-        MenuJson.BeginElement(sb, ref count, menuId + ".watermark", shell.Footer, update: false);
-        MenuJson.Rect(sb, new MenuPosition(0.5f, 0f, 0.5f, 1f), new MenuOffset(-66.67f, 0f, 66.67f, 0f));
-        MenuJson.Text(sb, "hizen.dev", 13, MenuTheme.Watermark, TextAnchor.MiddleCenter, MenuFont.Poxel);
-        MenuJson.EndElement(sb);
-
-        MenuShell.Borders(sb, ref count, main, MenuTheme.Border);
-
-        shell.Payload = MenuShell.Finish(ref sb);
         _shells[key] = shell;
         return shell;
     }

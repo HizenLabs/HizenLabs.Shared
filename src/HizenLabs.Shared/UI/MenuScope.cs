@@ -17,6 +17,10 @@ public readonly struct MenuScope
         Container = container;
     }
 
+    /// <summary>A pure positioning container (no visual) - section bounds, slots, spacers.</summary>
+    public MenuScope AddContainer(MenuPosition position, MenuOffset offset, string name = "") =>
+        new(_menu, _menu.CreateContainer(Container, position, offset, name));
+
     public MenuScope AddPanel(MenuPosition position, MenuOffset offset, Color color, string name = "", bool needsCursor = false, bool needsKeyboard = false) =>
         new(_menu, _menu.CreatePanel(Container, position, offset, color, name, needsCursor, needsKeyboard));
 
@@ -29,4 +33,18 @@ public readonly struct MenuScope
 
     public MenuScope AddButton(MenuPosition position, MenuOffset offset, string command, Color color, string name = "") =>
         new(_menu, _menu.CreateButton(Container, position, offset, command, color, name));
+
+    /// <summary>Four border panels around this scope.</summary>
+    public MenuScope AddBorders(Color color, float thickness = 1f)
+    {
+        _menu.CreateBorders(Container, color, thickness);
+        return this;
+    }
+
+    /// <summary>The standard close button, sized to this bar (see Menu.CreateCloseButton).</summary>
+    public MenuScope AddCloseButton(string closeTarget, float barHeight, float inset = 20f, float padding = 10f)
+    {
+        _menu.CreateCloseButton(Container, closeTarget, barHeight, inset, padding);
+        return this;
+    }
 }

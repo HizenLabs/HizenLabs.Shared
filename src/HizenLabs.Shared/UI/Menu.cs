@@ -194,6 +194,16 @@ public class Menu : IDisposable, Pool.IPooled
         return new MenuScope(this, new MenuContainer(name));
     }
 
+    /// <summary>A pure positioning container (no visual) - section bounds, slots, spacers.</summary>
+    public MenuContainer CreateContainer(MenuContainer parent, MenuPosition position, MenuOffset offset, string name = "")
+    {
+        name = EnsureName(name);
+        MenuJson.BeginElement(_sb, ref _count, name, parent.Id, update: false);
+        MenuJson.Rect(_sb, position, offset);
+        MenuJson.EndElement(_sb);
+        return new MenuContainer(name);
+    }
+
     public MenuContainer CreatePanel(
         MenuContainer parent,
         MenuPosition position,
@@ -258,6 +268,34 @@ public class Menu : IDisposable, Pool.IPooled
         return new MenuContainer(name);
     }
 
+    /// <summary>Four border panels around the parent, named "&lt;parent&gt;.border-*".</summary>
+    public void CreateBorders(MenuContainer parent, Color color, float thickness = 1f)
+    {
+        CreatePanel(parent, new MenuPosition(0f, 1f, 1f, 1f), new MenuOffset(0f, -thickness, 0f, 0f), color, parent.Id + ".border-top");
+        CreatePanel(parent, new MenuPosition(0f, 0f, 1f, 0f), new MenuOffset(0f, 0f, 0f, thickness), color, parent.Id + ".border-bottom");
+        CreatePanel(parent, new MenuPosition(0f, 0f, 0f, 1f), new MenuOffset(0f, thickness, thickness, -thickness), color, parent.Id + ".border-left");
+        CreatePanel(parent, new MenuPosition(1f, 0f, 1f, 1f), new MenuOffset(-thickness, thickness, 0f, -thickness), color, parent.Id + ".border-right");
+    }
+
+    /// <summary>
+    /// The standard close button: a square sized to its bar (height minus 2x padding),
+    /// vertically centered, inset from the right, closing the target CLIENT-side (no command,
+    /// no server round-trip - pair with a command via CreateButton when the server must know).
+    /// </summary>
+    public MenuContainer CreateCloseButton(MenuContainer parent, string closeTarget, float barHeight, float inset = 20f, float padding = 10f)
+    {
+        var half = (barHeight - padding * 2f) / 2f;
+        var name = parent.Id + ".close";
+
+        MenuJson.BeginElement(_sb, ref _count, name, parent.Id, update: false);
+        MenuJson.Rect(_sb, new MenuPosition(1f, 0.5f, 1f, 0.5f), new MenuOffset(-inset - half * 2f, -half, -inset, half));
+        MenuJson.Button(_sb, command: null, MenuTheme.ButtonBackground, close: closeTarget);
+        MenuJson.EndElement(_sb);
+
+        CreateText(new MenuContainer(name), MenuPosition.Full, MenuOffset.Zero, "\u2715", 14, MenuTheme.ButtonText, TextAnchor.MiddleCenter, MenuTheme.TitleFont, name + ".x");
+        return new MenuContainer(name);
+    }
+
     public void UpdatePanel(MenuContainer target, MenuPosition position, MenuOffset offset, Color color)
     {
         MenuJson.BeginElement(_sb, ref _count, target.Id, parent: null, update: true);
@@ -271,6 +309,19 @@ public class Menu : IDisposable, Pool.IPooled
         MenuJson.BeginElement(_sb, ref _count, target.Id, parent: null, update: true);
         MenuJson.Text(_sb, text, fontSize, color, align, font);
         MenuJson.EndElement(_sb);
+    }
+
+    /// <summary>Encodes the buffer as a finished element array - the immortal payload a layout
+    /// caches. Shell building only (see MenuShell.Build); one-time exact-size allocation.</summary>
+    internal byte[] ExportShell()
+    {
+        var length = _sb.Length + 1;
+        EnsureCapacity(ref _chars, length);
+        _sb.CopyTo(0, _chars, 0, _sb.Length);
+        _chars[_sb.Length] = ']';
+        var bytes = new byte[Encoding.UTF8.GetByteCount(_chars, 0, length)];
+        Encoding.UTF8.GetBytes(_chars, 0, length, bytes, 0);
+        return bytes;
     }
 
     /// <summary>Auto-name for elements the author does not address: "&lt;menuId&gt;.eN". Allocates

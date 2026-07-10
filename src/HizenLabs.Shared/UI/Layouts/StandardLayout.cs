@@ -68,41 +68,25 @@ public readonly struct StandardLayout
             Footer = menuId + ".footer",
         };
 
-        var background = menuId + ".bg";
-        var sb = MenuShell.Begin();
-        var count = 0;
+        shell.Payload = MenuShell.Build(menuId, menu =>
+        {
+            // Root: the destroy anchor, centered box of the requested size; the background
+            // panel carries the cursor.
+            var root = menu.CreateParent(layer, MenuPosition.Center, menuId);
+            var window = root.AddPanel(MenuPosition.Center,
+                new MenuOffset(-width / 2f, -height / 2f, width / 2f, height / 2f),
+                MenuTheme.Background, needsCursor: true);
 
-        // Root: the destroy anchor, centered box of the requested size.
-        MenuJson.BeginElement(sb, ref count, menuId, Menu.LayerName(layer), update: false);
-        MenuJson.Rect(sb, MenuPosition.Center, new MenuOffset(-width / 2f, -height / 2f, width / 2f, height / 2f));
-        MenuJson.EndElement(sb);
+            var header = window.AddPanel(new MenuPosition(0f, 0.92f, 1f, 1f), new MenuOffset(8f, 4f, -8f, -8f), MenuTheme.Section, shell.Header);
+            if (closeButton)
+                header.AddCloseButton(closeTarget: menuId, barHeight: height * 0.08f);
 
-        // Background panel carries the cursor - a menu you can't click is rarely wanted.
-        MenuJson.BeginElement(sb, ref count, background, menuId, update: false);
-        MenuJson.Rect(sb, MenuPosition.Full, MenuOffset.Zero);
-        MenuJson.Image(sb, MenuTheme.Background);
-        MenuJson.Cursor(sb);
-        MenuJson.EndElement(sb);
+            // Content is a pure container: its children paint it.
+            window.AddContainer(new MenuPosition(0f, 0.08f, 1f, 0.92f), new MenuOffset(8f, 4f, -8f, -4f), shell.Content);
 
-        MenuJson.BeginElement(sb, ref count, shell.Header, background, update: false);
-        MenuJson.Rect(sb, new MenuPosition(0f, 0.92f, 1f, 1f), new MenuOffset(8f, 4f, -8f, -8f));
-        MenuJson.Image(sb, MenuTheme.Section);
-        MenuJson.EndElement(sb);
+            window.AddPanel(new MenuPosition(0f, 0f, 1f, 0.08f), new MenuOffset(8f, 8f, -8f, -4f), MenuTheme.Section, shell.Footer);
+        });
 
-        // Content is a pure container (no image): its children paint it.
-        if (closeButton)
-            MenuShell.CloseButton(sb, ref count, shell.Header, closeTarget: menuId, barHeight: height * 0.08f);
-
-        MenuJson.BeginElement(sb, ref count, shell.Content, background, update: false);
-        MenuJson.Rect(sb, new MenuPosition(0f, 0.08f, 1f, 0.92f), new MenuOffset(8f, 4f, -8f, -4f));
-        MenuJson.EndElement(sb);
-
-        MenuJson.BeginElement(sb, ref count, shell.Footer, background, update: false);
-        MenuJson.Rect(sb, new MenuPosition(0f, 0f, 1f, 0.08f), new MenuOffset(8f, 8f, -8f, -4f));
-        MenuJson.Image(sb, MenuTheme.Section);
-        MenuJson.EndElement(sb);
-
-        shell.Payload = MenuShell.Finish(ref sb);
         _shells[key] = shell;
         return shell;
     }

@@ -112,16 +112,23 @@ public class Menu : IDisposable, Pool.IPooled
         {
             _sb.Append(']');
             var length = _sb.Length;
-            if (_chars.Length < length)
-                _chars = new char[Math.Max(length, _chars.Length * 2)];
+            EnsureCapacity(ref _chars, length);
             _sb.CopyTo(0, _chars, 0, length);
-            var maxBytes = Encoding.UTF8.GetMaxByteCount(length);
-            if (_bytes.Length < maxBytes)
-                _bytes = new byte[Math.Max(maxBytes, _bytes.Length * 2)];
+            EnsureCapacity(ref _bytes, Encoding.UTF8.GetMaxByteCount(length));
             var size = Encoding.UTF8.GetBytes(_chars, 0, length, _bytes, 0);
             SendPayload(player.net.connection, _bytes, size);
             _sb.Length--; // reopen the array so the same menu can send to more players
         }
+    }
+
+    // Doubling growth for the scratch buffers. Deliberately NOT Array.Resize: that copies the
+    // old contents into the new array, and these buffers are fully overwritten before every
+    // read, so the copy would be pure waste.
+    private static void EnsureCapacity<T>(ref T[] array, int minSize)
+    {
+        if (array.Length >= minSize)
+            return;
+        array = new T[Math.Max(minSize, array.Length * 2)];
     }
 
     // The same wire write LUI does: an RPCMessage on the community entity carrying the payload.

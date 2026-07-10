@@ -1,5 +1,6 @@
 using Facepunch;
 using Network;
+using Oxide.Core;
 using System;
 using System.Text;
 using UnityEngine;
@@ -24,9 +25,11 @@ public class Menu : IDisposable, Pool.IPooled
 {
     #region Fields
 
-    // Scratch buffers for the send path. They ride the pooled Menu instance (grown on demand,
-    // never shrunk), because the BCL ArrayPool is unusable here: Oxide's ref set makes
-    // System.Buffers inaccessible and Facepunch's ArrayPool has fixed bucket semantics.
+    // Send-path scratch buffers, grown on demand (never shrunk) and riding the pooled Menu
+    // instance. The BCL ArrayPool cannot be used in game context on EITHER platform: Oxide's ref
+    // set ships an internalized System.Buffers, and under Carbon the game's mscorlib ALSO defines
+    // ArrayPool<T>, making every reference ambiguous (CS0433) with no way to disambiguate from
+    // plugin code.
     private char[] _chars = new char[512];
     private byte[] _bytes = new byte[1536];
     private StringBuilder _sb;
@@ -126,6 +129,14 @@ public class Menu : IDisposable, Pool.IPooled
     // Stream, so the byte window writes directly. Pure game API, identical on Carbon and Oxide.
     internal static void SendPayload(Connection connection, byte[] bytes, int size)
     {
+        // The client hard-rejects AddUI payloads over 10 MiB (and a menu anywhere near that
+        // needs pagination, not a bigger buffer).
+        if (size > 10 * 1024 * 1024)
+        {
+            Interface.Oxide.LogWarning($"Menu payload too large to send ({size} bytes); dropped.");
+            return;
+        }
+
         var write = Net.sv.StartWrite();
         write.PacketID(Message.Type.RPCMessage);
         write.EntityID(CommunityEntity.ServerInstance.net.ID);
@@ -273,8 +284,8 @@ public class Menu : IDisposable, Pool.IPooled
             new(_menu, _menu.CreateText(Container, position, offset, text, fontSize, color, align, name));
 
         /// <summary>Pre-formatted centered text filling the scope - the header one-liner.</summary>
-        public MenuScope AddTitle(string text, int fontSize = 18) =>
-            AddText(MenuPosition.Full, MenuOffset.Zero, text, fontSize, Color.white);
+        public MenuScope AddTitle(string text, int fontSize = MenuTheme.TitleFontSize) =>
+            AddText(MenuPosition.Full, MenuOffset.Zero, text, fontSize, MenuTheme.TitleText);
     }
 
     /// <summary>The scopes of a precompiled layout shell.</summary>

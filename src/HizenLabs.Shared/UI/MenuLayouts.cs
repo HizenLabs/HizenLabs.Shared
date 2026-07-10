@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 using System.Text;
-using UnityEngine;
 
 namespace HizenLabs.Shared.UI;
 
@@ -46,9 +45,6 @@ public static class MenuLayouts
 
     private static readonly Dictionary<(Layouts, MenuSize, Menu.Layer, string), CompiledLayout> _cache = new();
 
-    private static readonly Color _background = new(0.09f, 0.09f, 0.09f, 0.96f);
-    private static readonly Color _section = new(1f, 1f, 1f, 0.06f);
-
     public static CompiledLayout Get(Layouts layout, MenuSize size, Menu.Layer layer, string menuId)
     {
         var key = (layout, size, layer, menuId);
@@ -87,13 +83,13 @@ public static class MenuLayouts
         // Background panel carries the cursor - a menu you can't click is rarely wanted.
         MenuJson.BeginElement(sb, ref count, background, menuId, update: false);
         MenuJson.Rect(sb, MenuPosition.Full, MenuOffset.Zero);
-        MenuJson.Image(sb, _background);
+        MenuJson.Image(sb, MenuTheme.Background);
         MenuJson.Cursor(sb);
         MenuJson.EndElement(sb);
 
         MenuJson.BeginElement(sb, ref count, header, background, update: false);
         MenuJson.Rect(sb, new MenuPosition(0f, 0.92f, 1f, 1f), new MenuOffset(8f, 4f, -8f, -8f));
-        MenuJson.Image(sb, _section);
+        MenuJson.Image(sb, MenuTheme.Section);
         MenuJson.EndElement(sb);
 
         // Content is a pure container (no image): its children paint it.
@@ -103,7 +99,7 @@ public static class MenuLayouts
 
         MenuJson.BeginElement(sb, ref count, footer, background, update: false);
         MenuJson.Rect(sb, new MenuPosition(0f, 0f, 1f, 0.08f), new MenuOffset(8f, 8f, -8f, -4f));
-        MenuJson.Image(sb, _section);
+        MenuJson.Image(sb, MenuTheme.Section);
         MenuJson.EndElement(sb);
 
         sb.Append(']');

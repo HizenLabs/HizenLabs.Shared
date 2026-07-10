@@ -23,7 +23,7 @@ public class Menu : IDisposable, Pool.IPooled
 {
     #region Fields
 
-    private readonly StringBuilder _sb = new(1024);
+    private StringBuilder _sb;
     private bool _disposed;
     private string _prefix;
     private int _count;
@@ -52,7 +52,8 @@ public class Menu : IDisposable, Pool.IPooled
 
     public void EnterPool()
     {
-        _sb.Clear();
+        // The buffer goes back to the shared pool - idle pooled menus don't pin one each.
+        Pool.FreeUnmanaged(ref _sb);
         _prefix = null;
         _layout = null;
         _count = 0;
@@ -62,6 +63,7 @@ public class Menu : IDisposable, Pool.IPooled
     public void LeavePool()
     {
         _disposed = false;
+        _sb = Pool.Get<StringBuilder>();
         _sb.Append('[');
     }
 

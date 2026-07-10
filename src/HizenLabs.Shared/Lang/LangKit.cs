@@ -17,8 +17,10 @@ public static class LangKit
     /// </summary>
     public static Dictionary<string, string> BuildDefaults<T>() where T : BaseLang, new()
     {
-        var defaults = new T();
+        var defaults = Facepunch.Pool.Get<T>();
         var fields = typeof(T).GetFields(BindingFlags.Public | BindingFlags.Instance);
+        // Not pooled: ownership of the dictionary escapes into lang.RegisterMessages, which may
+        // retain the reference - returning it later would corrupt the platform's state.
         var messages = new Dictionary<string, string>(fields.Length);
         foreach (var field in fields)
         {
@@ -26,6 +28,7 @@ public static class LangKit
                 continue;
             messages[field.Name] = (string)field.GetValue(defaults) ?? string.Empty;
         }
+        Facepunch.Pool.Free(ref defaults);
         return messages;
     }
 

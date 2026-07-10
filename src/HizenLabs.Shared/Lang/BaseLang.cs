@@ -17,6 +17,15 @@ namespace HizenLabs.Shared.Lang;
 /// registers the defaults. Per-player language is the platform's job (players pick via /lang,
 /// owners translate the generated oxide/lang files); only the "en" defaults are registered here.
 /// </summary>
-public abstract class BaseLang
+public abstract class BaseLang : Facepunch.Pool.IPooled
 {
+    // Instances are transient default-holders rented by LangKit during registration; the field
+    // initializers re-run on construction, not on pool cycles, so defaults are read before Free.
+    public void EnterPool()
+    {
+    }
+
+    public void LeavePool()
+    {
+    }
 }

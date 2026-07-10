@@ -73,8 +73,8 @@ public static class MenuLayouts
         var content = menuId + ".content";
         var footer = menuId + ".footer";
 
-        // One-time compile per cache key; the builder here is throwaway by design.
-        var sb = new StringBuilder(1024);
+        // One-time compile per cache key.
+        var sb = Facepunch.Pool.Get<StringBuilder>();
         var count = 0;
         sb.Append('[');
 
@@ -106,6 +106,8 @@ public static class MenuLayouts
         MenuJson.EndElement(sb);
 
         sb.Append(']');
-        return new CompiledLayout(sb.ToString(), menuId, header, content, footer);
+        var json = sb.ToString();
+        Facepunch.Pool.FreeUnmanaged(ref sb);
+        return new CompiledLayout(json, menuId, header, content, footer);
     }
 }

@@ -72,9 +72,11 @@ public class KitWireTests
     {
         var wiring = KitWire.Generate("Bar", new[] { ("Bar.cs", Entry), ("Bar.Lang.cs", Lang) });
 
-        // Enum members mirror the lang fields, in declaration order.
+        // Enum members mirror the lang fields, in declaration order, each doc'd with its default
+        // text so hovering a key in the IDE shows the message it stands for.
         Assert.Contains("private enum LangKeys", wiring);
-        Assert.Contains("        Hello,\n        Bye,", wiring);
+        Assert.Contains("/// hi\n        /// </summary>\n        Hello,", wiring);
+        Assert.Contains("/// bye {0}\n        /// </summary>\n        Bye,", wiring);
 
         // msg.Get/msg.Chat resolve keys through a generated name table (no enum.ToString()).
         Assert.Contains("private static readonly KitMessages msg = new();", wiring);

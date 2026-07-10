@@ -47,7 +47,7 @@ public static class KitWire
     {
         var configTypes = new List<string>();
         var langTypes = new List<string>();
-        var langFields = new List<string>();
+        var langFields = new List<(string Name, string Text)>();
         var authoredOverrides = new HashSet<string>(StringComparer.Ordinal);
         var commands = new List<BoundCommand>();
         // Every type declared in the folder (top-level and nested) with its properties, for
@@ -94,7 +94,13 @@ public static class KitWire
                         if (!field.Modifiers.Any(SyntaxKind.PublicKeyword))
                             continue;
                         foreach (var variable in field.Declaration.Variables)
-                            langFields.Add(variable.Identifier.Text);
+                        {
+                            var defaultText = variable.Initializer?.Value is LiteralExpressionSyntax literal
+                                              && literal.IsKind(SyntaxKind.StringLiteralExpression)
+                                ? literal.Token.ValueText
+                                : variable.Initializer?.Value.ToString() ?? "";
+                            langFields.Add((variable.Identifier.Text, defaultText));
+                        }
                     }
                 }
             }
@@ -164,15 +170,23 @@ public static class KitWire
                 sb.Append($"\n    protected override void LoadDefaultMessages()\n    {{\n        base.LoadDefaultMessages();\n        {MsgType}.Plugin = this;\n        lang.RegisterMessages(LangKit.BuildDefaults<{lang}>(), this, \"en\");\n    }}\n");
 
             sb.Append($"\n    private enum {KeysEnum}\n    {{\n");
-            foreach (var field in langFields)
-                sb.Append($"        {field},\n");
+            for (var i = 0; i < langFields.Count; i++)
+            {
+                var (name, text) = langFields[i];
+                if (i > 0)
+                    sb.Append('\n');
+                // The default text as the member's doc, so hovering a LangKeys value in the IDE
+                // shows the message it stands for.
+                sb.Append($"        /// <summary>\n        /// {XmlDocEscape(text)}\n        /// </summary>\n");
+                sb.Append($"        {name},\n");
+            }
             sb.Append("    }\n");
 
             sb.Append($"\n    private sealed class {MsgType}\n    {{\n");
             sb.Append($"        internal static {pluginName} Plugin;\n\n");
             sb.Append("        private static readonly string[] _keys =\n        {\n");
-            foreach (var field in langFields)
-                sb.Append($"            nameof({lang}.{field}),\n");
+            foreach (var (name, _) in langFields)
+                sb.Append($"            nameof({lang}.{name}),\n");
             sb.Append("        };\n");
             sb.Append($"\n        public string Get({KeysEnum} key, BasePlayer player = null, object arg1 = null, object arg2 = null, object arg3 = null)\n");
             sb.Append("        {\n            var format = Plugin.lang.GetMessage(_keys[(int)key], Plugin, player?.UserIDString);\n            return LangKit.Format(format, arg1, arg2, arg3);\n        }\n");
@@ -246,6 +260,11 @@ public static class KitWire
         }
         return null;
     }
+
+    // Escape for xml-doc content, one line per doc line (newlines in the text become /// lines).
+    private static string XmlDocEscape(string text) =>
+        text.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;")
+            .Replace("\r\n", "\n").Replace("\n", "\n        /// ");
 
     private static string LastIdentifier(ExpressionSyntax expr) => expr switch
     {

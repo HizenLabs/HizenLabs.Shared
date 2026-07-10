@@ -4,36 +4,44 @@ using System.Reflection;
 namespace HizenLabs.Shared.Lang;
 
 /// <summary>
-/// Registration plumbing behind <see cref="BaseLang"/>. Reflection runs exactly once per plugin
-/// load (cold path); after that, message lookup is the platform's lang API and formatting goes
-/// through <see cref="Msg"/>'s pooled path.
+/// Runtime behind <see cref="BaseLang"/> and the generated <c>msg</c> accessor. Deliberately
+/// plugin-free: the platform's lang members (lang.RegisterMessages / lang.GetMessage) are
+/// protected on the plugin base, so the generated wiring inside the plugin class makes those
+/// calls and this kit only does the work that needs no plugin access.
 /// </summary>
 public static class LangKit
 {
     /// <summary>
-    /// Registers the lang class's fields as the plugin's "en" messages and self-keys the
-    /// instance: after this call every field holds its own name, so fields are passed directly
-    /// as lang keys. Also binds <see cref="Msg"/> to the plugin. Safe to call repeatedly (the
-    /// platform re-invokes LoadDefaultMessages when lang files rebuild).
+    /// The default (English) messages of a lang class: field name = key, field initializer =
+    /// text. Reflection runs only here, at plugin load / lang rebuild (cold path).
     /// </summary>
-    public static void Register<T>(PluginBase plugin, T instance) where T : BaseLang
+    public static Dictionary<string, string> BuildDefaults<T>() where T : BaseLang, new()
     {
-        Msg.Bind(plugin);
-
-        if (instance.Defaults is null)
+        var defaults = new T();
+        var fields = typeof(T).GetFields(BindingFlags.Public | BindingFlags.Instance);
+        var messages = new Dictionary<string, string>(fields.Length);
+        foreach (var field in fields)
         {
-            var fields = typeof(T).GetFields(BindingFlags.Public | BindingFlags.Instance);
-            var defaults = new Dictionary<string, string>(fields.Length);
-            foreach (var field in fields)
-            {
-                if (field.FieldType != typeof(string))
-                    continue;
-                defaults[field.Name] = (string)field.GetValue(instance) ?? string.Empty;
-                field.SetValue(instance, field.Name); // self-key: the field now holds its lang key
-            }
-            instance.Defaults = defaults;
+            if (field.FieldType != typeof(string))
+                continue;
+            messages[field.Name] = (string)field.GetValue(defaults) ?? string.Empty;
+        }
+        return messages;
+    }
+
+    /// <summary>
+    /// Formats a resolved message with the given args through the pooled
+    /// <see cref="TempArguments"/>; nothing is allocated except the result string. No-arg calls
+    /// return the format unchanged.
+    /// </summary>
+    public static string Format(string format, object arg1 = null, object arg2 = null, object arg3 = null)
+    {
+        if (arg1 == null)
+        {
+            return format;
         }
 
-        plugin.lang.RegisterMessages(instance.Defaults, plugin, "en");
+        using var args = TempArguments.Create(arg1, arg2, arg3);
+        return args.StringFormat(format);
     }
 }

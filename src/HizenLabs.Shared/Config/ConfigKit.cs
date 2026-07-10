@@ -1,3 +1,4 @@
+using Oxide.Core;
 using System;
 using System.IO;
 
@@ -21,12 +22,14 @@ public static class ConfigKit
         {
             var config = plugin.Config.ReadObject<T>()
                 ?? throw new InvalidOperationException("config file is empty");
+            config.Plugin = plugin;
             plugin.Config.WriteObject(config, true);
             return config;
         }
         catch (Exception ex)
         {
-            plugin.PrintWarning($"Failed to load config ({ex.Message}); backing up the broken file and starting from defaults.");
+            // PrintWarning is protected on the plugin base, so log through the core interface.
+            Interface.Oxide.LogWarning($"[{plugin.Name}] Failed to load config ({ex.Message}); backing up the broken file and starting from defaults.");
             Backup(plugin);
             return Default<T>(plugin);
         }
@@ -35,7 +38,7 @@ public static class ConfigKit
     /// <summary>Creates a default <typeparamref name="T"/> and writes it as the config file.</summary>
     public static T Default<T>(PluginBase plugin) where T : BaseConfig, new()
     {
-        var config = new T();
+        var config = new T { Plugin = plugin };
         plugin.Config.WriteObject(config, true);
         return config;
     }

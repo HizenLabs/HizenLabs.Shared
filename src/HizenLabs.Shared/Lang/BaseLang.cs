@@ -1,5 +1,3 @@
-using System.Collections.Generic;
-
 namespace HizenLabs.Shared.Lang;
 
 /// <summary>
@@ -13,17 +11,12 @@ namespace HizenLabs.Shared.Lang;
 /// }
 /// </code>
 /// No wiring to write: the KitWire pre-build step ('hizenbundle wire') sees the class and
-/// generates &lt;Plugin&gt;.Kit.g.cs with a static <c>L</c> field and a LoadDefaultMessages
-/// override that calls <see cref="LangKit.Register{T}"/>. After registration each field holds
-/// its own key (self-keying), so call sites pass fields as keys:
-/// <c>Msg.Chat(player, L.SaveSuccess, count, ms)</c>. Per-player language is the platform's job
-/// (players pick via /lang, owners translate the generated oxide/lang files); only the "en"
-/// defaults are registered here.
+/// generates &lt;Plugin&gt;.Kit.g.cs with a <c>LangKeys</c> enum (one member per field), a
+/// <c>msg</c> accessor (<c>msg.Get(LangKeys.SaveSuccess, player, count, ms)</c> /
+/// <c>msg.Chat(player, LangKeys.NoPermission)</c>), and a LoadDefaultMessages override that
+/// registers the defaults. Per-player language is the platform's job (players pick via /lang,
+/// owners translate the generated oxide/lang files); only the "en" defaults are registered here.
 /// </summary>
 public abstract class BaseLang
 {
-    /// <summary>The default (English) messages, captured on first registration so re-registration
-    /// (the platform re-invokes LoadDefaultMessages on lang rebuilds) stays correct after the
-    /// fields have been self-keyed.</summary>
-    internal Dictionary<string, string> Defaults;
 }

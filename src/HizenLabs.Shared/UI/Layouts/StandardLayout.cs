@@ -26,9 +26,9 @@ public readonly struct StandardLayout
         Footer = footer;
     }
 
-    public static StandardLayout Create(Menu menu, MenuSize size, Menu.Layer layer = Menu.Layer.Overlay)
+    public static StandardLayout Create(Menu menu, MenuSize size, Menu.Layer layer = Menu.Layer.Overlay, bool closeButton = true)
     {
-        var shell = GetShell(size, layer, menu.Id);
+        var shell = GetShell(size, layer, menu.Id, closeButton);
         menu.AttachShell(shell.Payload);
         return new StandardLayout(
             menu.Scope(shell.Header),
@@ -46,11 +46,11 @@ public readonly struct StandardLayout
         public string Footer;
     }
 
-    private static readonly Dictionary<(MenuSize, Menu.Layer, string), Shell> _shells = new();
+    private static readonly Dictionary<(MenuSize, Menu.Layer, string, bool), Shell> _shells = new();
 
-    private static Shell GetShell(MenuSize size, Menu.Layer layer, string menuId)
+    private static Shell GetShell(MenuSize size, Menu.Layer layer, string menuId, bool closeButton)
     {
-        var key = (size, layer, menuId);
+        var key = (size, layer, menuId, closeButton);
         if (_shells.TryGetValue(key, out var shell))
             return shell;
 
@@ -90,6 +90,9 @@ public readonly struct StandardLayout
         MenuJson.EndElement(sb);
 
         // Content is a pure container (no image): its children paint it.
+        if (closeButton)
+            MenuShell.CloseButton(sb, ref count, shell.Header, closeTarget: menuId, barHeight: height * 0.08f);
+
         MenuJson.BeginElement(sb, ref count, shell.Content, background, update: false);
         MenuJson.Rect(sb, new MenuPosition(0f, 0.08f, 1f, 0.92f), new MenuOffset(8f, 4f, -8f, -4f));
         MenuJson.EndElement(sb);

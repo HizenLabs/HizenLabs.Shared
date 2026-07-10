@@ -37,9 +37,9 @@ public readonly struct AppLayout
         Footer = menu.Scope(shell.Footer);
     }
 
-    public static AppLayout Create(Menu menu, Menu.Layer layer = Menu.Layer.Overlay)
+    public static AppLayout Create(Menu menu, Menu.Layer layer = Menu.Layer.Overlay, bool closeButton = true)
     {
-        var shell = GetShell(layer, menu.Id);
+        var shell = GetShell(layer, menu.Id, closeButton);
         menu.AttachShell(shell.Payload);
         return new AppLayout(menu, shell);
     }
@@ -72,11 +72,11 @@ public readonly struct AppLayout
         public string BadgeLabel;
     }
 
-    private static readonly Dictionary<(Menu.Layer, string), Shell> _shells = new();
+    private static readonly Dictionary<(Menu.Layer, string, bool), Shell> _shells = new();
 
-    private static Shell GetShell(Menu.Layer layer, string menuId)
+    private static Shell GetShell(Menu.Layer layer, string menuId, bool closeButton)
     {
-        var key = (layer, menuId);
+        var key = (layer, menuId, closeButton);
         if (_shells.TryGetValue(key, out var shell))
             return shell;
 
@@ -139,6 +139,9 @@ public readonly struct AppLayout
         MenuJson.BeginElement(sb, ref count, shell.BadgeLabel, shell.Header, update: false);
         MenuJson.Rect(sb, new MenuPosition(0f, 0.5f, 0f, 0.5f), new MenuOffset(272f, -16f, 328f, 16f));
         MenuJson.EndElement(sb);
+
+        if (closeButton)
+            MenuShell.CloseButton(sb, ref count, shell.Header, closeTarget: menuId, barHeight: 56f);
 
         MenuShell.Borders(sb, ref count, shell.Header, MenuTheme.Border);
         MenuShell.Borders(sb, ref count, main, MenuTheme.Border);

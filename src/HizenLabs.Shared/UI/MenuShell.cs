@@ -44,6 +44,27 @@ public static class MenuShell
         MenuJson.EndElement(sb);
     }
 
+    /// <summary>
+    /// The standard close button: a square sized to fit its bar, vertically centered, inset from
+    /// the right edge, closing the menu root CLIENT-side (the close attribute needs no command,
+    /// so this lives in the shell). Size it by the bar's pixel height minus padding.
+    /// </summary>
+    public static void CloseButton(StringBuilder sb, ref int count, string parent, string closeTarget, float barHeight, float inset = 20f, float padding = 10f)
+    {
+        var half = (barHeight - padding * 2f) / 2f;
+        var name = parent + ".close";
+
+        MenuJson.BeginElement(sb, ref count, name, parent, update: false);
+        MenuJson.Rect(sb, new MenuPosition(1f, 0.5f, 1f, 0.5f), new MenuOffset(-inset - half * 2f, -half, -inset, half));
+        MenuJson.Button(sb, command: null, MenuTheme.ButtonBackground, close: closeTarget);
+        MenuJson.EndElement(sb);
+
+        MenuJson.BeginElement(sb, ref count, name + ".x", name, update: false);
+        MenuJson.Rect(sb, MenuPosition.Full, MenuOffset.Zero);
+        MenuJson.Text(sb, "\u2715", 14, MenuTheme.ButtonText, TextAnchor.MiddleCenter, MenuFont.RobotoCondensedBold);
+        MenuJson.EndElement(sb);
+    }
+
     /// <summary>Closes the array and encodes the ready-to-send payload.</summary>
     public static byte[] Finish(ref StringBuilder sb)
     {

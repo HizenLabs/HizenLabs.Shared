@@ -83,12 +83,25 @@ internal static class MenuJson
         sb.Append("\"}");
     }
 
-    public static void Button(StringBuilder sb, string command, Color color)
+    /// <summary>Button component. command runs server-side; close destroys the named panel
+    /// client-side (no round-trip) - either or both.</summary>
+    public static void Button(StringBuilder sb, string command, Color color, string close = null)
     {
         Comma(sb);
-        sb.Append("{\"type\":\"UnityEngine.UI.Button\",\"command\":\"");
-        Escape(sb, command);
-        sb.Append("\",\"color\":\"");
+        sb.Append("{\"type\":\"UnityEngine.UI.Button\"");
+        if (!string.IsNullOrEmpty(command))
+        {
+            sb.Append(",\"command\":\"");
+            Escape(sb, command);
+            sb.Append('"');
+        }
+        if (!string.IsNullOrEmpty(close))
+        {
+            sb.Append(",\"close\":\"");
+            Escape(sb, close);
+            sb.Append('"');
+        }
+        sb.Append(",\"color\":\"");
         sb.Append(MenuColor.ToCui(color));
         sb.Append("\"}");
     }

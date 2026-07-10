@@ -39,7 +39,7 @@ public class Menu : IDisposable, Pool.IPooled
     private string _prefix;
     private int _count;
     private int _autoId;
-    private MenuLayouts.CompiledLayout _layout;
+    private byte[] _shell;
 
     #endregion
 
@@ -66,7 +66,7 @@ public class Menu : IDisposable, Pool.IPooled
         // The buffer goes back to the shared pool - idle pooled menus don't pin one each.
         Pool.FreeUnmanaged(ref _sb);
         _prefix = null;
-        _layout = null;
+        _shell = null;
         _count = 0;
         _autoId = 0;
     }
@@ -100,12 +100,10 @@ public class Menu : IDisposable, Pool.IPooled
     public void Send(BasePlayer player)
     {
         // The precompiled shell first (its panels are the parents of everything below), then the
-        // dynamic elements. Both go out as raw AddUI RPC bytes - no payload string, no CuiHelper
-        // re-encode; the shell's bytes are immortal cache, the dynamic payload rides rented
-        // buffers.
-        if (_layout is not null)
+        // dynamic elements. Both go out as raw AddUI RPC bytes; the shell is immortal cache.
+        if (_shell is not null)
         {
-            SendPayload(player.net.connection, _layout.Bytes, _layout.Bytes.Length);
+            SendPayload(player.net.connection, _shell, _shell.Length);
         }
 
         if (_count > 0)
@@ -159,23 +157,26 @@ public class Menu : IDisposable, Pool.IPooled
 
     #endregion
 
-    #region Layout
+    #region Shells
 
     /// <summary>
-    /// Attaches a precompiled layout shell (root + header/content/footer) to this menu. The
-    /// shell JSON compiles once per (layout, size, layer, menu id) and is cached forever - after
-    /// the first open it is sent as-is with zero building work. Returned scopes target the
-    /// shell's sub-panels; what goes inside them is this menu's dynamic content.
+    /// Registers a precompiled shell payload (see <see cref="MenuShell"/>) to send ahead of this
+    /// menu's dynamic elements. Layout types (StandardLayout, ConfirmDialog, ...) compile their
+    /// shell once per menu id, cache it forever, and attach it here on every open.
     /// </summary>
-    public MenuLayout CreateLayout(Layouts layout, MenuSize size, Layer layer = Layer.Overlay)
+    public void AttachShell(byte[] shell)
     {
-        _layout = MenuLayouts.Get(layout, size, layer, _prefix);
-        return new MenuLayout(
-            new MenuScope(this, _layout.Root),
-            new MenuScope(this, _layout.Header),
-            new MenuScope(this, _layout.Content),
-            new MenuScope(this, _layout.Footer));
+        _shell = shell;
     }
+
+    /// <summary>The menu id this menu was created with (its root/destroy anchor name).</summary>
+    public string Id => _prefix;
+
+    /// <summary>A scope bound to an existing element (a shell's slot, a known id).</summary>
+    public MenuScope Scope(MenuContainer container) => new(this, container);
+
+    /// <summary>A button handle bound to an existing slot (see <see cref="MenuButton"/>).</summary>
+    public MenuButton Button(MenuContainer slot) => new(this, slot);
 
     #endregion
 
@@ -232,6 +233,30 @@ public class Menu : IDisposable, Pool.IPooled
         return new MenuContainer(name);
     }
 
+    /// <summary>
+    /// A clickable region running a command. Under Carbon the command resolves through the
+    /// protected-command table (pair handlers with [MenuCommand]); under Oxide it is the plain
+    /// console command name.
+    /// </summary>
+    public MenuContainer CreateButton(
+        MenuContainer parent,
+        MenuPosition position,
+        MenuOffset offset,
+        string command,
+        Color color,
+        string name = "")
+    {
+        name = EnsureName(name);
+#if CARBON
+        command = Carbon.Community.Protect(command);
+#endif
+        MenuJson.BeginElement(_sb, ref _count, name, parent.Id, update: false);
+        MenuJson.Rect(_sb, position, offset);
+        MenuJson.Button(_sb, command, color);
+        MenuJson.EndElement(_sb);
+        return new MenuContainer(name);
+    }
+
     public void UpdatePanel(MenuContainer target, MenuPosition position, MenuOffset offset, Color color)
     {
         MenuJson.BeginElement(_sb, ref _count, target.Id, parent: null, update: true);
@@ -255,66 +280,6 @@ public class Menu : IDisposable, Pool.IPooled
     #endregion
 
     #region Types
-
-    /// <summary>
-    /// Handle to a menu element. The id IS the element's client-side name - the one address that
-    /// works for creating children and updating across sends, on both platforms. Declare stable
-    /// ids as constants; the implicit conversion lifts them into handles with no allocation.
-    /// </summary>
-    public readonly struct MenuContainer
-    {
-        public readonly string Id;
-
-        public MenuContainer(string id)
-        {
-            Id = id;
-        }
-
-        public static implicit operator MenuContainer(string id) => new(id);
-    }
-
-    /// <summary>
-    /// A container-bound builder: Add* methods need no container argument because the scope IS
-    /// the container. Structs all the way down - nothing to pool, nothing to leak.
-    /// </summary>
-    public readonly struct MenuScope
-    {
-        private readonly Menu _menu;
-        public readonly MenuContainer Container;
-
-        internal MenuScope(Menu menu, MenuContainer container)
-        {
-            _menu = menu;
-            Container = container;
-        }
-
-        public MenuScope AddPanel(MenuPosition position, MenuOffset offset, Color color, string name = "", bool needsCursor = false, bool needsKeyboard = false) =>
-            new(_menu, _menu.CreatePanel(Container, position, offset, color, name, needsCursor, needsKeyboard));
-
-        public MenuScope AddText(MenuPosition position, MenuOffset offset, string text, int fontSize, Color color, TextAnchor align = TextAnchor.MiddleCenter, string name = "") =>
-            new(_menu, _menu.CreateText(Container, position, offset, text, fontSize, color, align, name));
-
-        /// <summary>Pre-formatted centered text filling the scope - the header one-liner.</summary>
-        public MenuScope AddTitle(string text, int fontSize = MenuTheme.TitleFontSize) =>
-            AddText(MenuPosition.Full, MenuOffset.Zero, text, fontSize, MenuTheme.TitleText);
-    }
-
-    /// <summary>The scopes of a precompiled layout shell.</summary>
-    public readonly struct MenuLayout
-    {
-        public readonly MenuScope Root;
-        public readonly MenuScope Header;
-        public readonly MenuScope Content;
-        public readonly MenuScope Footer;
-
-        internal MenuLayout(MenuScope root, MenuScope header, MenuScope content, MenuScope footer)
-        {
-            Root = root;
-            Header = header;
-            Content = content;
-            Footer = footer;
-        }
-    }
 
     public enum Layer
     {

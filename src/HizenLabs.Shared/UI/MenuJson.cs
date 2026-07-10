@@ -85,6 +85,16 @@ internal static class MenuJson
         sb.Append("\"}");
     }
 
+    public static void Button(StringBuilder sb, string command, Color color)
+    {
+        Comma(sb);
+        sb.Append("{\"type\":\"UnityEngine.UI.Button\",\"command\":\"");
+        Escape(sb, command);
+        sb.Append("\",\"color\":\"");
+        sb.Append(MenuColor.ToCui(color));
+        sb.Append("\"}");
+    }
+
     public static void Cursor(StringBuilder sb)
     {
         Comma(sb);

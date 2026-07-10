@@ -58,6 +58,8 @@ public partial class Menu : IDisposable, Pool.IPooled
 
     #region Framework Methods
 
+    public partial void Send(BasePlayer player);
+
     private partial void Init(PluginBase plugin, string menuId);
 
     private partial void EnterPoolCore();

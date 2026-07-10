@@ -11,8 +11,6 @@ namespace HizenLabs.Shared.UI;
 /// </summary>
 internal static class MenuJson
 {
-    private const string DefaultFont = "robotocondensed-regular.ttf";
-
     private static readonly string[] _alignNames =
     {
         "UpperLeft", "UpperCenter", "UpperRight",
@@ -69,7 +67,7 @@ internal static class MenuJson
         sb.Append("\"}");
     }
 
-    public static void Text(StringBuilder sb, string text, int fontSize, Color color, TextAnchor align)
+    public static void Text(StringBuilder sb, string text, int fontSize, Color color, TextAnchor align, MenuFont font = MenuFont.RobotoCondensedRegular)
     {
         Comma(sb);
         sb.Append("{\"type\":\"UnityEngine.UI.Text\",\"text\":\"");
@@ -77,7 +75,7 @@ internal static class MenuJson
         sb.Append("\",\"fontSize\":");
         sb.Append(fontSize);
         sb.Append(",\"font\":\"");
-        sb.Append(DefaultFont);
+        sb.Append(MenuFontNames.Get(font));
         sb.Append("\",\"align\":\"");
         sb.Append(_alignNames[(int)align]);
         sb.Append("\",\"color\":\"");

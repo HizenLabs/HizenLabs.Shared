@@ -14,6 +14,12 @@ public static class MenuTheme
     public static readonly Color TitleText = Color.white;
     public static readonly Color BodyText = new(0.85f, 0.85f, 0.85f, 1f);
 
+    public static readonly Color WindowBackground = new(0f, 0f, 0f, 1f);
+    public static readonly Color Border = new(0.388f, 0.388f, 0.388f, 1f);
+    public static readonly Color MutedText = new(0.388f, 0.388f, 0.388f, 1f);
+    public static readonly Color Watermark = new(0.388f, 0.388f, 0.388f, 0.2f);
+
+    public const MenuFont TitleFont = MenuFont.RobotoCondensedBold;
     public const int TitleFontSize = 18;
     public const int BodyFontSize = 14;
 }

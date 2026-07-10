@@ -1,5 +1,6 @@
 using Facepunch;
 using System.Text;
+using UnityEngine;
 
 namespace HizenLabs.Shared.UI;
 
@@ -17,6 +18,30 @@ public static class MenuShell
         var sb = Pool.Get<StringBuilder>();
         sb.Append('[');
         return sb;
+    }
+
+    /// <summary>Four 1px-style border panels around a parent, named "&lt;parent&gt;.border-*".</summary>
+    public static void Borders(StringBuilder sb, ref int count, string parent, Color color, float thickness = 1f)
+    {
+        MenuJson.BeginElement(sb, ref count, parent + ".border-top", parent, update: false);
+        MenuJson.Rect(sb, new MenuPosition(0f, 1f, 1f, 1f), new MenuOffset(0f, -thickness, 0f, 0f));
+        MenuJson.Image(sb, color);
+        MenuJson.EndElement(sb);
+
+        MenuJson.BeginElement(sb, ref count, parent + ".border-bottom", parent, update: false);
+        MenuJson.Rect(sb, new MenuPosition(0f, 0f, 1f, 0f), new MenuOffset(0f, 0f, 0f, thickness));
+        MenuJson.Image(sb, color);
+        MenuJson.EndElement(sb);
+
+        MenuJson.BeginElement(sb, ref count, parent + ".border-left", parent, update: false);
+        MenuJson.Rect(sb, new MenuPosition(0f, 0f, 0f, 1f), new MenuOffset(0f, thickness, thickness, -thickness));
+        MenuJson.Image(sb, color);
+        MenuJson.EndElement(sb);
+
+        MenuJson.BeginElement(sb, ref count, parent + ".border-right", parent, update: false);
+        MenuJson.Rect(sb, new MenuPosition(1f, 0f, 1f, 1f), new MenuOffset(-thickness, thickness, 0f, -thickness));
+        MenuJson.Image(sb, color);
+        MenuJson.EndElement(sb);
     }
 
     /// <summary>Closes the array and encodes the ready-to-send payload.</summary>

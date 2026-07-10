@@ -223,12 +223,13 @@ public class Menu : IDisposable, Pool.IPooled
         int fontSize,
         Color color,
         TextAnchor align = TextAnchor.MiddleCenter,
+        MenuFont font = MenuFont.RobotoCondensedRegular,
         string name = "")
     {
         name = EnsureName(name);
         MenuJson.BeginElement(_sb, ref _count, name, parent.Id, update: false);
         MenuJson.Rect(_sb, position, offset);
-        MenuJson.Text(_sb, text, fontSize, color, align);
+        MenuJson.Text(_sb, text, fontSize, color, align, font);
         MenuJson.EndElement(_sb);
         return new MenuContainer(name);
     }
@@ -265,10 +266,10 @@ public class Menu : IDisposable, Pool.IPooled
         MenuJson.EndElement(_sb);
     }
 
-    public void UpdateText(MenuContainer target, string text, int fontSize, Color color, TextAnchor align = TextAnchor.MiddleCenter)
+    public void UpdateText(MenuContainer target, string text, int fontSize, Color color, TextAnchor align = TextAnchor.MiddleCenter, MenuFont font = MenuFont.RobotoCondensedRegular)
     {
         MenuJson.BeginElement(_sb, ref _count, target.Id, parent: null, update: true);
-        MenuJson.Text(_sb, text, fontSize, color, align);
+        MenuJson.Text(_sb, text, fontSize, color, align, font);
         MenuJson.EndElement(_sb);
     }
 

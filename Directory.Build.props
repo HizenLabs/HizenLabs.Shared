@@ -101,7 +101,8 @@
       <Output TaskParameter="ConsoleOutput" ItemName="_WireLog" />
       <Output TaskParameter="ExitCode" PropertyName="_WireExit" />
     </Exec>
-    <Error Condition="'$(_WireExit)' != '0'" Text="[wire] kit wiring failed:%0A@(_WireLog, '%0A')" />
+    <Error Condition="'$(_WireExit)' != '0'"
+           Text="[wire] kit wiring failed ('unknown command: wire' means a STALE shared submodule or bundler bin - run 'git submodule update --init' and rebuild):%0A@(_WireLog, '%0A')" />
     <!-- A wiring file created just now isn't in the evaluation-time Compile glob; add it so the
          very first build after creating a config/lang class already compiles against it. -->
     <ItemGroup>

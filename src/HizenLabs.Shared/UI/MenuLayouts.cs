@@ -24,18 +24,19 @@ public enum MenuSize
 /// </summary>
 public static class MenuLayouts
 {
-    /// <summary>A compiled shell: the ready-to-send payload plus the ids of its scopes.</summary>
+    /// <summary>A compiled shell: the ready-to-send UTF-8 payload plus the ids of its scopes.
+    /// Bytes are pre-encoded so opening a menu sends immortal cache with zero building work.</summary>
     public sealed class CompiledLayout
     {
-        public readonly string Json;
+        public readonly byte[] Bytes;
         public readonly string Root;
         public readonly string Header;
         public readonly string Content;
         public readonly string Footer;
 
-        internal CompiledLayout(string json, string root, string header, string content, string footer)
+        internal CompiledLayout(byte[] bytes, string root, string header, string content, string footer)
         {
-            Json = json;
+            Bytes = bytes;
             Root = root;
             Header = header;
             Content = content;
@@ -106,8 +107,11 @@ public static class MenuLayouts
         MenuJson.EndElement(sb);
 
         sb.Append(']');
-        var json = sb.ToString();
+        // One-time per cache key: encode straight to the immortal byte payload.
+        var chars = new char[sb.Length];
+        sb.CopyTo(0, chars, 0, sb.Length);
+        var bytes = Encoding.UTF8.GetBytes(chars, 0, chars.Length);
         Facepunch.Pool.FreeUnmanaged(ref sb);
-        return new CompiledLayout(json, menuId, header, content, footer);
+        return new CompiledLayout(bytes, menuId, header, content, footer);
     }
 }

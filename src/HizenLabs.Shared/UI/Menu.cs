@@ -1,5 +1,7 @@
 using Facepunch;
+using Network;
 using System;
+using System.Buffers;
 using System.Text;
 using UnityEngine;
 
@@ -84,21 +86,44 @@ public class Menu : IDisposable, Pool.IPooled
 
     #region Send
 
+    private static readonly uint _addUiRpc = StringPool.Get("AddUI");
+
     public void Send(BasePlayer player)
     {
         // The precompiled shell first (its panels are the parents of everything below), then the
-        // dynamic elements. Both are single AddUi RPCs.
+        // dynamic elements. Both go out as raw AddUI RPC bytes - no payload string, no CuiHelper
+        // re-encode; the shell's bytes are immortal cache, the dynamic payload rides rented
+        // buffers.
         if (_layout is not null)
         {
-            Oxide.Game.Rust.Cui.CuiHelper.AddUi(player, _layout.Json);
+            SendBytes(player.net.connection, _layout.Bytes, _layout.Bytes.Length);
         }
 
         if (_count > 0)
         {
             _sb.Append(']');
-            Oxide.Game.Rust.Cui.CuiHelper.AddUi(player, _sb.ToString());
+            var length = _sb.Length;
+            var chars = ArrayPool<char>.Shared.Rent(length);
+            _sb.CopyTo(0, chars, 0, length);
+            var bytes = ArrayPool<byte>.Shared.Rent(Encoding.UTF8.GetMaxByteCount(length));
+            var size = Encoding.UTF8.GetBytes(chars, 0, length, bytes, 0);
+            SendBytes(player.net.connection, bytes, size);
+            ArrayPool<char>.Shared.Return(chars);
+            ArrayPool<byte>.Shared.Return(bytes);
             _sb.Length--; // reopen the array so the same menu can send to more players
         }
+    }
+
+    // The same wire write LUI does: an RPCMessage on the community entity carrying the payload
+    // with an explicit size. Pure game API, identical on Carbon and Oxide.
+    internal static void SendBytes(Connection connection, byte[] bytes, int size)
+    {
+        var write = Net.sv.StartWrite();
+        write.PacketID(Message.Type.RPCMessage);
+        write.EntityID(CommunityEntity.ServerInstance.net.ID);
+        write.UInt32(_addUiRpc);
+        write.BytesWithSize(bytes, size);
+        write.Send(new SendInfo(connection));
     }
 
     #endregion

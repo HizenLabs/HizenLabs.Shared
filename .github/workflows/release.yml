@@ -88,6 +88,8 @@ jobs:
             fi
 
             out="$DIST/$name.cs"
+            # Regenerate the kit wiring so a stale committed <Plugin>.Kit.g.cs can't ship.
+            dotnet exec "$BUNDLER" wire --dir "$folder"
             dotnet exec "$BUNDLER" bundle \
               --plugin "$entry" \
               --shared-dir "$SHARED_RUNTIME" \

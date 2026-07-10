@@ -1,6 +1,7 @@
 // HizenLabs.Bundler CLI. Commands:
 //
 //   bundle    merge a plugin + the shared code it uses into one deployable .cs (stamps [Info]).
+//   wire      bootstrap <Plugin>.Kit.g.cs (config/lang bridge) from the plugin's kit classes.
 //   version   resolve and print a plugin's version (from --changelog or --version).
 //   notes     print the newest changelog entry's body (GitHub release notes).
 //   validate  check a CHANGELOG.md against the version policy (start at 1.0.0, canonical bumps).
@@ -22,6 +23,7 @@ static int Dispatch(string[] argv)
     return argv[0] switch
     {
         "bundle" => Bundle(rest),
+        "wire" => Wire(rest),
         "version" => PrintVersion(rest),
         "notes" => PrintNotes(rest),
         "validate" => ValidateChangelog(rest),
@@ -117,6 +119,50 @@ static int Bundle(string[] args)
         }
     }
     return result.Compiles ? 0 : 1;
+}
+
+// Bootstrap the per-plugin kit wiring (<Plugin>.Kit.g.cs) from the plugin's config/lang classes.
+// --src scans a tree for plugin folders (a folder containing <DirName>.cs); --dir wires one
+// folder. --check fails (exit 1) instead of writing, for CI staleness gates.
+static int Wire(string[] args)
+{
+    string src = null, dir = null;
+    var check = false;
+    for (var i = 0; i < args.Length; i++)
+    {
+        switch (args[i])
+        {
+            case "--src": src = args[++i]; break;
+            case "--dir": dir = args[++i]; break;
+            case "--check": check = true; break;
+            default: return Usage($"unknown argument: {args[i]}");
+        }
+    }
+    if (src is null && dir is null)
+        return Usage("wire needs --src or --dir");
+
+    var folders = new List<string>();
+    if (dir is not null)
+        folders.Add(dir);
+    if (src is not null)
+        folders.AddRange(Directory.EnumerateDirectories(src, "*", SearchOption.AllDirectories)
+            .Where(d => !d.Contains($"{Path.DirectorySeparatorChar}bin") && !d.Contains($"{Path.DirectorySeparatorChar}obj")));
+
+    try
+    {
+        foreach (var folder in folders)
+        {
+            var status = KitWire.WireFolder(folder, check);
+            if (status is not null)
+                Console.Error.WriteLine($"[wire] {status}");
+        }
+        return 0;
+    }
+    catch (KitWireException ex)
+    {
+        Console.Error.WriteLine($"[wire] ERROR: {ex.Message}");
+        return 1;
+    }
 }
 
 static int PrintVersion(string[] args)
@@ -229,6 +275,7 @@ static int Usage(string? message)
         "usage:\n" +
         "  hizenbundle bundle --plugin <f> --shared-dir <d>[;<d>...] (--version <v> | --changelog <f>) [--dev]\n" +
         "             [--part-regions] [--out <f>] [--carbon-refs <d>[;...]] [--oxide-refs <d>[;...]]\n" +
+        "  hizenbundle wire (--src <d> | --dir <d>) [--check]\n" +
         "  hizenbundle version (--version <v> | --changelog <f>) [--dev] | --all --changelog <f>\n" +
         "  hizenbundle notes --changelog <f>\n" +
         "  hizenbundle validate --changelog <f>");

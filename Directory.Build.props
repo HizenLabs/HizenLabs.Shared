@@ -83,6 +83,32 @@
        managed refs -> on success, copy the staged .cs to the live plugins folder. A compile
        failure fails the build; the staged .cs is left for inspection and the bundler prints
        navigable errors pointing into it. Nothing broken is ever copied to the server. -->
+  <!-- Kit wiring: before a plugin project compiles, bootstrap each plugin's <Plugin>.Kit.g.cs
+       (the config/lang bridge) from the presence of its BaseConfig/BaseLang classes. The wiring
+       is a real committed source file, so the IDE sees ordinary code - create a config class,
+       build once, and `config` exists. Only rewritten when the content changes; a convention
+       violation (two config classes) fails the build with the bundler's message. Opt out with
+       -p:KitWire=false. -->
+  <Target Name="KitWire" BeforeTargets="CoreCompile" Condition="'$(DeployTarget)' == 'true' AND '$(KitWire)' != 'false'">
+    <PropertyGroup>
+      <_WireBundlerProj>$(MSBuildThisFileDirectory)src\HizenLabs.Bundler\HizenLabs.Bundler.csproj</_WireBundlerProj>
+      <_WireBundlerDll>$(MSBuildThisFileDirectory)src\HizenLabs.Bundler\bin\$(Platform)\$(Configuration)\net10.0\hizenbundle.dll</_WireBundlerDll>
+    </PropertyGroup>
+    <MSBuild Projects="$(_WireBundlerProj)" Targets="Build"
+             Properties="Configuration=$(Configuration);Platform=$(Platform)" />
+    <Exec Command="dotnet exec &quot;$(_WireBundlerDll)&quot; wire --src &quot;$(MSBuildProjectDirectory)&quot; 2&gt;&amp;1"
+          ConsoleToMSBuild="true" IgnoreExitCode="true">
+      <Output TaskParameter="ConsoleOutput" ItemName="_WireLog" />
+      <Output TaskParameter="ExitCode" PropertyName="_WireExit" />
+    </Exec>
+    <Error Condition="'$(_WireExit)' != '0'" Text="[wire] kit wiring failed:%0A@(_WireLog, '%0A')" />
+    <!-- A wiring file created just now isn't in the evaluation-time Compile glob; add it so the
+         very first build after creating a config/lang class already compiles against it. -->
+    <ItemGroup>
+      <Compile Include="**/*.Kit.g.cs" Exclude="@(Compile)" />
+    </ItemGroup>
+  </Target>
+
   <Target Name="DeployPlugins" AfterTargets="Build" Condition="'$(DeployEnabled)' == 'true' AND '$(DeployTarget)' == 'true' AND '@(DeployPlugin)' != ''">
     <!-- Resolve each plugin NAME to its source file under src/. The repo root is one level up
          from this shared submodule (<repo>/shared -> <repo>), so plugin sources live in <repo>/src. -->

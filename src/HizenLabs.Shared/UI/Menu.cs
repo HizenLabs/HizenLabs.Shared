@@ -110,14 +110,16 @@ public class Menu : IDisposable, Pool.IPooled
 
         if (_count > 0)
         {
-            _sb.Append(']');
-            var length = _sb.Length;
+            // The builder holds an OPEN array ("[" + elements); the closing "]" goes straight
+            // into the scratch chars so the builder stays open - the same menu can keep sending
+            // (more players) or keep appending elements.
+            var length = _sb.Length + 1;
             EnsureCapacity(ref _chars, length);
-            _sb.CopyTo(0, _chars, 0, length);
+            _sb.CopyTo(0, _chars, 0, _sb.Length);
+            _chars[_sb.Length] = ']';
             EnsureCapacity(ref _bytes, Encoding.UTF8.GetMaxByteCount(length));
             var size = Encoding.UTF8.GetBytes(_chars, 0, length, _bytes, 0);
             SendPayload(player.net.connection, _bytes, size);
-            _sb.Length--; // reopen the array so the same menu can send to more players
         }
     }
 

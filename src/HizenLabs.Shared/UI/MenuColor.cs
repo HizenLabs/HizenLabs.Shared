@@ -1,49 +1,61 @@
+using System;
 using System.Collections.Generic;
 using System.Globalization;
+using UnityEngine;
 
 namespace HizenLabs.Shared.UI;
 
 /// <summary>
-/// Color normalization for CUI: the client only parses "r g b a" (floats 0-1, space-separated),
-/// so hex input ("#RRGGBB", "RRGGBBAA", with or without '#') is converted server-side. Results
-/// are cached per distinct input string - a UI palette is a handful of colors, so steady-state
-/// lookups allocate nothing. Strings already containing a space pass through untouched.
+/// Menu color plumbing. API surfaces take <see cref="Color"/>; the CUI wire format is the
+/// "r g b a" float string the client parses, produced once per distinct color and cached, so
+/// steady-state sends allocate nothing for colors.
 /// </summary>
 public static class MenuColor
 {
-    private static readonly Dictionary<string, string> _cache = new();
+    private static readonly Dictionary<Color, string> _cuiCache = new();
 
-    public static string Normalize(string color)
+    /// <summary>The client wire string ("r g b a") for a color, cached per distinct value.</summary>
+    public static string ToCui(Color color)
     {
-        if (string.IsNullOrEmpty(color) || color.IndexOf(' ') >= 0)
-            return color;
+        if (_cuiCache.TryGetValue(color, out var cui))
+            return cui;
 
-        if (_cache.TryGetValue(color, out var parsed))
-            return parsed;
-
-        parsed = ParseHex(color) ?? color;
-        _cache[color] = parsed;
-        return parsed;
+        cui = string.Format(CultureInfo.InvariantCulture, "{0:0.###} {1:0.###} {2:0.###} {3:0.###}",
+            color.r, color.g, color.b, color.a);
+        _cuiCache[color] = cui;
+        return cui;
     }
 
-    /// <summary>"RRGGBB"/"RRGGBBAA" (optionally '#'-prefixed) to "r g b a", or null if not hex.</summary>
-    private static string ParseHex(string color)
+    /// <summary>"RRGGBB"/"RRGGBBAA" (optionally '#'-prefixed) to a color. Throws on bad input -
+    /// use for literals/config values where a typo should fail loudly at load.</summary>
+    public static Color FromHex(string hex)
     {
-        var hex = color[0] == '#' ? color.Substring(1) : color;
-        if (hex.Length != 6 && hex.Length != 8)
-            return null;
+        if (!TryParseHex(hex, out var color))
+            throw new FormatException($"'{hex}' is not RRGGBB/RRGGBBAA hex");
+        return color;
+    }
 
-        if (!uint.TryParse(hex, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var value))
-            return null;
+    /// <summary>Non-throwing <see cref="FromHex"/> for user/runtime input.</summary>
+    public static bool TryParseHex(string hex, out Color color)
+    {
+        color = default;
+        if (string.IsNullOrEmpty(hex))
+            return false;
 
-        if (hex.Length == 6)
+        var digits = hex[0] == '#' ? hex.Substring(1) : hex;
+        if (digits.Length != 6 && digits.Length != 8)
+            return false;
+        if (!uint.TryParse(digits, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var value))
+            return false;
+
+        if (digits.Length == 6)
             value = (value << 8) | 0xFF; // no alpha digits: opaque
 
-        var r = (byte)(value >> 24);
-        var g = (byte)(value >> 16);
-        var b = (byte)(value >> 8);
-        var a = (byte)value;
-        return string.Format(CultureInfo.InvariantCulture, "{0:0.###} {1:0.###} {2:0.###} {3:0.###}",
-            r / 255f, g / 255f, b / 255f, a / 255f);
+        color = new Color(
+            (byte)(value >> 24) / 255f,
+            (byte)(value >> 16) / 255f,
+            (byte)(value >> 8) / 255f,
+            (byte)value / 255f);
+        return true;
     }
 }

@@ -1,5 +1,6 @@
 ﻿using Carbon.Components;
 using Oxide.Core;
+using UnityEngine;
 
 namespace HizenLabs.Shared.UI;
 
@@ -52,23 +53,23 @@ public partial class Menu
     {
         var container = _cui.v2.CreateParent((CUI.ClientPanels)layer, position, name);
 
-        return new MenuContainer(container);
+        return new MenuContainer(container.name);
     }
 
     public MenuContainer CreatePanel(
         MenuContainer parent,
         LuiPosition position,
         LuiOffset offset,
-        string color,
+        Color color,
         string name = "",
         bool needsCursor = false,
         bool needsKeyboard = false)
     {
         var container = _cui.v2.CreatePanel(
-            parent.Container,
+            parent.Id,
             position,
             offset,
-            MenuColor.Normalize(color),
+            MenuColor.ToCui(color),
             name);
 
         if (needsCursor)
@@ -81,33 +82,21 @@ public partial class Menu
             container.AddKeyboard();
         }
 
-        return new(container);
+        return new MenuContainer(container.name);
     }
 
     public MenuContainer UpdatePanel(
-        string panelId,
+        MenuContainer target,
         LuiPosition position,
         LuiOffset offset,
-        string color)
+        Color color)
     {
-        var container = _cui.v2.Update(panelId);
+        var container = _cui.v2.Update(target.Id);
 
         container.SetAnchorAndOffset(position, offset);
-        container.SetColor(MenuColor.Normalize(color));
+        container.SetColor(MenuColor.ToCui(color));
 
-        return new(container);
-    }
-
-    public readonly struct MenuContainer
-    {
-        public readonly string Id => Container.name;
-
-        public readonly LUI.LuiContainer Container { get; }
-
-        public MenuContainer(LUI.LuiContainer container)
-        {
-            Container = container;
-        }
+        return target;
     }
 
     public enum Layer

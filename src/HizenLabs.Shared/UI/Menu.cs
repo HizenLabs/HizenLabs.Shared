@@ -25,13 +25,15 @@ public class Menu : IDisposable, Pool.IPooled
 {
     #region Fields
 
-    // Send-path scratch buffers, grown on demand (never shrunk) and riding the pooled Menu
-    // instance. The BCL ArrayPool cannot be used in game context on EITHER platform: Oxide's ref
-    // set ships an internalized System.Buffers, and under Carbon the game's mscorlib ALSO defines
-    // ArrayPool<T>, making every reference ambiguous (CS0433) with no way to disambiguate from
-    // plugin code.
-    private char[] _chars = new char[512];
-    private byte[] _bytes = new byte[1536];
+    // Send-path scratch buffers: ONE static pair shared by every Menu of this plugin (plugin code
+    // runs on the server's main thread and Send never re-enters, so there is no concurrent use).
+    // Grow-on-demand doubling, never shrunk - the discarded arrays are O(log maxMenuSize) over
+    // the plugin's LIFETIME, then the high-water buffers serve every send with zero allocation.
+    // The BCL ArrayPool cannot be used in game context on EITHER platform: Oxide ships an
+    // internalized System.Buffers, and under Carbon the game's mscorlib ALSO defines ArrayPool<T>,
+    // making every reference ambiguous (CS0433) with no way to disambiguate from plugin code.
+    private static char[] _chars = new char[512];
+    private static byte[] _bytes = new byte[1536];
     private StringBuilder _sb;
     private bool _disposed;
     private string _prefix;

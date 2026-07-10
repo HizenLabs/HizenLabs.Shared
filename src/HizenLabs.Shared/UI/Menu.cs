@@ -1,9 +1,11 @@
 using Facepunch;
 using Network;
 using System;
-using System.Buffers;
 using System.Text;
 using UnityEngine;
+// Facepunch also declares an ArrayPool<T>; alias the BCL ones to keep references unambiguous.
+using CharPool = System.Buffers.ArrayPool<char>;
+using BytePool = System.Buffers.ArrayPool<byte>;
 
 namespace HizenLabs.Shared.UI;
 
@@ -103,26 +105,27 @@ public class Menu : IDisposable, Pool.IPooled
         {
             _sb.Append(']');
             var length = _sb.Length;
-            var chars = ArrayPool<char>.Shared.Rent(length);
+            var chars = CharPool.Shared.Rent(length);
             _sb.CopyTo(0, chars, 0, length);
-            var bytes = ArrayPool<byte>.Shared.Rent(Encoding.UTF8.GetMaxByteCount(length));
+            var bytes = BytePool.Shared.Rent(Encoding.UTF8.GetMaxByteCount(length));
             var size = Encoding.UTF8.GetBytes(chars, 0, length, bytes, 0);
             SendBytes(player.net.connection, bytes, size);
-            ArrayPool<char>.Shared.Return(chars);
-            ArrayPool<byte>.Shared.Return(bytes);
+            CharPool.Shared.Return(chars);
+            BytePool.Shared.Return(bytes);
             _sb.Length--; // reopen the array so the same menu can send to more players
         }
     }
 
     // The same wire write LUI does: an RPCMessage on the community entity carrying the payload
-    // with an explicit size. Pure game API, identical on Carbon and Oxide.
+    // with an explicit size (the span overload, so a rented buffer's slack never hits the wire).
+    // Pure game API, identical on Carbon and Oxide.
     internal static void SendBytes(Connection connection, byte[] bytes, int size)
     {
         var write = Net.sv.StartWrite();
         write.PacketID(Message.Type.RPCMessage);
         write.EntityID(CommunityEntity.ServerInstance.net.ID);
         write.UInt32(_addUiRpc);
-        write.BytesWithSize(bytes, size);
+        write.BytesWithSize(new ReadOnlySpan<byte>(bytes, 0, size));
         write.Send(new SendInfo(connection));
     }
 

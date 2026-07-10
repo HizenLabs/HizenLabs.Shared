@@ -1,15 +1,12 @@
 namespace HizenLabs.Shared.Config;
 
 /// <summary>
-/// Base for a plugin's config class. Derive, declare settings as properties with initializers
-/// (the initializer IS the default), and wire the plugin with the standard bridge:
-/// <code>
-/// private static MyPluginConfig config;
-/// protected override void LoadConfig()        { base.LoadConfig(); config = ConfigKit.Load&lt;MyPluginConfig&gt;(this); }
-/// protected override void LoadDefaultConfig() { base.LoadDefaultConfig(); config = ConfigKit.Default&lt;MyPluginConfig&gt;(this); }
-/// protected override void SaveConfig()        { base.SaveConfig(); ConfigKit.Save(this, config); }
-/// </code>
-/// Use <c>[JsonProperty("Friendly Name")]</c> for the keys server owners see.
+/// Base for a plugin's config class (one per plugin). Derive and declare settings as properties
+/// with initializers - the initializer IS the default. No wiring to write: the KitWire pre-build
+/// step ('hizenbundle wire') sees the class and generates &lt;Plugin&gt;.Kit.g.cs with a static
+/// <c>config</c> field and the LoadConfig/LoadDefaultConfig/SaveConfig overrides backed by
+/// <see cref="ConfigKit"/>. Use <c>[JsonProperty("Friendly Name")]</c> for the keys server
+/// owners see in the JSON file.
 /// </summary>
 public abstract class BaseConfig
 {

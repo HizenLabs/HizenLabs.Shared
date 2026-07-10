@@ -4,9 +4,10 @@ using System;
 namespace HizenLabs.Shared.Lang;
 
 /// <summary>
-/// Pooled holder for string.Format arguments (the ABS pattern): the holder comes from
-/// Facepunch.Pool, the object[] from a shared ArrayPool, and Dispose returns both. Trailing null
-/// args shrink the rented array, so <c>Create(x, null, null)</c> rents length 1.
+/// Pooled holder for string.Format arguments: the holder comes from Facepunch.Pool, the object[]
+/// from a shared ArrayPool, and Dispose returns both - so formatting allocates nothing but the
+/// result string. Trailing null args shrink the rented array, so <c>Create(x, null, null)</c>
+/// rents length 1.
 /// <code>
 /// using var args = TempArguments.Create(arg1, arg2, arg3);
 /// var text = args.StringFormat(format);

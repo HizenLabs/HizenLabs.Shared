@@ -1,10 +1,9 @@
 namespace HizenLabs.Shared.Lang;
 
 /// <summary>
-/// Localized message access, ABS-style: the format comes from the platform's lang API (per-player
-/// language resolved by the platform), args go through the pooled <see cref="TempArguments"/> and
-/// plain string.Format. Nothing is new()'d per call - the holder and its array are pooled; the
-/// one unavoidable allocation is the formatted string itself.
+/// Localized message access. The format comes from the platform's lang API (which resolves the
+/// player's chosen language); args go through the pooled <see cref="TempArguments"/> and plain
+/// string.Format, so nothing is allocated per call except the formatted string itself.
 /// Bound to the plugin by <see cref="LangKit.Register{T}"/>; the bundler inlines a private copy
 /// of this type into each plugin, so the static state is per-plugin at runtime.
 /// </summary>

@@ -42,9 +42,10 @@ public readonly struct MenuScope
     }
 
     /// <summary>The standard close button, sized to this bar (see Menu.CreateCloseButton).</summary>
-    public MenuScope AddCloseButton(string closeTarget, float barHeight, float inset = 20f, float padding = 10f)
+    public MenuScope AddCloseButton(string closeTarget, float barHeight, float inset = 10f, float padding = 10f)
     {
         _menu.CreateCloseButton(Container, closeTarget, barHeight, inset, padding);
         return this;
     }
 }
+    

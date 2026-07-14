@@ -93,16 +93,19 @@ public readonly struct AppLayout
             var root = menu.CreateParent(layer, MenuPosition.Full, menuId);
             var backdrop = root.AddPanel(MenuPosition.Full, MenuOffset.Zero, MenuTheme.Backdrop, needsCursor: true);
 
-            // Main window: centered, fixed 1066.67 x 622.22, bordered frame.
-            var window = backdrop.AddPanel(MenuPosition.Center, new MenuOffset(-533.33f, -311.11f, 533.33f, 311.11f), MenuTheme.WindowBackground);
+            // Main window: centered, fixed 1000 x 600, bordered frame.
+            var window = backdrop.AddPanel(MenuPosition.Center, new MenuOffset(-540f, -280f, 540f, 280f), MenuTheme.WindowBackground);
 
             // Header strip: title + summary slots, bottom divider, close button.
             var header = window.AddContainer(new MenuPosition(0f, 1f, 1f, 1f), new MenuOffset(0f, -54.44f, 0f, 0f), shell.Header);
             header.AddContainer(new MenuPosition(0f, 0f, 0f, 1f), new MenuOffset(20f, 0f, 210f, 0f), shell.Title);
             header.AddContainer(new MenuPosition(0f, 0f, 0f, 1f), new MenuOffset(217.78f, 0f, 551.11f, 0f), shell.Summary);
             header.AddPanel(new MenuPosition(0f, 0f, 1f, 0f), new MenuOffset(0f, 0f, 0f, 1f), MenuTheme.Border);
+
             if (closeButton)
+            {
                 header.AddCloseButton(closeTarget: menuId, barHeight: 54.44f);
+            }
 
             // Content between the bars (pure container - children paint it).
             window.AddContainer(MenuPosition.Full, new MenuOffset(0f, 45.56f, 0f, -54.44f), shell.Content);

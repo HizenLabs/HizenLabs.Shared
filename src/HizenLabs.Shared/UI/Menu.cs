@@ -67,6 +67,7 @@ public class Menu : IDisposable, Pool.IPooled
         Pool.FreeUnmanaged(ref _sb);
         _prefix = null;
         _shell = null;
+        CloseCommand = null;
         _count = 0;
         _autoId = 0;
     }
@@ -171,6 +172,12 @@ public class Menu : IDisposable, Pool.IPooled
 
     /// <summary>The menu id this menu was created with (its root/destroy anchor name).</summary>
     public string Id => _prefix;
+
+    /// <summary>
+    /// Console command a layout attaches to its close button, so the server hears about the
+    /// client-side close. Set before creating the layout; null leaves the close silent.
+    /// </summary>
+    public string CloseCommand { get; set; }
 
     /// <summary>A scope bound to an existing element (a shell's slot, a known id).</summary>
     public MenuScope Scope(MenuContainer container) => new(this, container);

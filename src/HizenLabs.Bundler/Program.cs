@@ -157,10 +157,13 @@ static int Wire(string[] args)
             var status = KitWire.WireFolder(folder, check);
             if (status is not null)
                 Console.Error.WriteLine($"[wire] {status}");
+            var menuStatus = MenuWire.WireFolder(folder, check);
+            if (menuStatus is not null)
+                Console.Error.WriteLine($"[wire] {menuStatus}");
         }
         return 0;
     }
-    catch (KitWireException ex)
+    catch (Exception ex) when (ex is KitWireException or MenuWireException)
     {
         Console.Error.WriteLine($"[wire] ERROR: {ex.Message}");
         return 1;

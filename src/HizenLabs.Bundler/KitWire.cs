@@ -75,6 +75,10 @@ public static class KitWire
                         var setting = CommandSettingName(method);
                         if (setting is not null)
                             commands.Add(new BoundCommand(setting, method.Identifier.Text));
+                        // [MenuLayout(Command = ...)] binds like a [ConfigCommand], with the
+                        // handler MenuWire generates.
+                        if (MenuWire.CommandBinding(method) is { } menuCommand)
+                            commands.Add(new BoundCommand(menuCommand.Setting, menuCommand.Handler));
                     }
                     continue;
                 }

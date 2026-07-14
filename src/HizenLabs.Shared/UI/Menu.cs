@@ -14,9 +14,12 @@ namespace HizenLabs.Shared.UI;
 /// implementation: the payload goes out through CuiHelper.AddUi on Carbon and Oxide alike.
 ///
 /// Element names are the client-side handles everything addresses: declare stable ids as
-/// constants for anything you will update, and let unnamed elements auto-name. Re-adding an
-/// existing name destroys the old element AND its children, so a menu shell is sent once per
-/// open and updates go through Update* (never a re-send of the shell).
+/// constants for anything you will update, and let unnamed elements auto-name. Adding a name
+/// that already exists does NOT replace it - the client creates a duplicate and repoints its
+/// name registry at the new copy, so DestroyUi kills only the newest and the old one lingers
+/// unaddressable (until an ancestor is destroyed; a duplicated ROOT lingers until reconnect).
+/// Roots created by CreateParent therefore carry a destroyUi of their own name, making a shell
+/// re-send an atomic replace. Everything else must be sent once and updated via Update*.
 ///
 /// The Menu instance is pooled; scopes and handles are structs, so building a menu allocates
 /// only auto-generated names and the payload string a send produces.
@@ -98,13 +101,19 @@ public class Menu : IDisposable, Pool.IPooled
 
     private static readonly uint _addUiRpc = StringPool.Get("AddUI");
 
-    public void Send(BasePlayer player)
+    /// <summary>Sends the shell (if attached) and the built elements. Returns false when
+    /// nothing reached the client - no live connection, or the payload was dropped - so callers
+    /// can keep their open-menu tracking honest.</summary>
+    public bool Send(BasePlayer player)
     {
+        if (player == null || player.net?.connection == null)
+            return false;
+
         // The precompiled shell first (its panels are the parents of everything below), then the
         // dynamic elements. Both go out as raw AddUI RPC bytes; the shell is immortal cache.
-        if (_shell is not null)
+        if (_shell is not null && !SendPayload(player.net.connection, _shell, _shell.Length))
         {
-            SendPayload(player.net.connection, _shell, _shell.Length);
+            return false;
         }
 
         if (_count > 0)
@@ -118,8 +127,10 @@ public class Menu : IDisposable, Pool.IPooled
             _chars[_sb.Length] = ']';
             EnsureCapacity(ref _bytes, Encoding.UTF8.GetMaxByteCount(length));
             var size = Encoding.UTF8.GetBytes(_chars, 0, length, _bytes, 0);
-            SendPayload(player.net.connection, _bytes, size);
+            return SendPayload(player.net.connection, _bytes, size);
         }
+
+        return true;
     }
 
     // Doubling growth for the scratch buffers. Deliberately NOT Array.Resize: that copies the
@@ -137,14 +148,14 @@ public class Menu : IDisposable, Pool.IPooled
     // hand because the game's span types live in its netstandard facade, which a net48 dev
     // compile cannot import, making every BytesWithSize overload uncallable here. NetWrite is a
     // Stream, so the byte window writes directly. Pure game API, identical on Carbon and Oxide.
-    internal static void SendPayload(Connection connection, byte[] bytes, int size)
+    internal static bool SendPayload(Connection connection, byte[] bytes, int size)
     {
         // The client hard-rejects AddUI payloads over 10 MiB (and a menu anywhere near that
         // needs pagination, not a bigger buffer).
         if (size > 10 * 1024 * 1024)
         {
             Interface.Oxide.LogWarning($"Menu payload too large to send ({size} bytes); dropped.");
-            return;
+            return false;
         }
 
         var write = Net.sv.StartWrite();
@@ -154,6 +165,7 @@ public class Menu : IDisposable, Pool.IPooled
         write.UInt32((uint)size);
         write.Write(bytes, 0, size);
         write.Send(new SendInfo(connection));
+        return true;
     }
 
     #endregion
@@ -191,21 +203,24 @@ public class Menu : IDisposable, Pool.IPooled
 
     /// <summary>
     /// A root attach point on a client layer. Name it the menu id so closing the menu destroys
-    /// the whole tree.
+    /// the whole tree. The root destroys any same-named predecessor as part of its own add, so
+    /// re-sending a shell atomically replaces an already-open copy instead of duplicating it.
     /// </summary>
     public MenuScope CreateParent(Layer layer, MenuPosition position, string name)
     {
-        MenuJson.BeginElement(_sb, ref _count, name, LayerName(layer), update: false);
+        MenuJson.BeginElement(_sb, ref _count, name, LayerName(layer), update: false, destroy: name);
         MenuJson.Rect(_sb, position, MenuOffset.Zero);
         MenuJson.EndElement(_sb);
         return new MenuScope(this, new MenuContainer(name));
     }
 
-    /// <summary>A pure positioning container (no visual) - section bounds, slots, spacers.</summary>
-    public MenuContainer CreateContainer(MenuContainer parent, MenuPosition position, MenuOffset offset, string name = "")
+    /// <summary>A pure positioning container (no visual) - section bounds, slots, spacers.
+    /// replace makes the add destroy any same-named predecessor first; set it on any container
+    /// that gets re-sent while its previous copy may still exist (page roots).</summary>
+    public MenuContainer CreateContainer(MenuContainer parent, MenuPosition position, MenuOffset offset, string name = "", bool replace = false)
     {
         name = EnsureName(name);
-        MenuJson.BeginElement(_sb, ref _count, name, parent.Id, update: false);
+        MenuJson.BeginElement(_sb, ref _count, name, parent.Id, update: false, destroy: replace ? name : null);
         MenuJson.Rect(_sb, position, offset);
         MenuJson.EndElement(_sb);
         return new MenuContainer(name);

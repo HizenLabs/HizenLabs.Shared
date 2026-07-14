@@ -19,8 +19,11 @@ internal static class MenuJson
     };
 
     /// <summary>Opens an element. Pass a null parent for update elements (the name addresses an
-    /// existing element; components below patch it).</summary>
-    public static void BeginElement(StringBuilder sb, ref int count, string name, string parent, bool update)
+    /// existing element; components below patch it). destroy names an element the client
+    /// destroys before creating this one (a no-op when absent) - pass the element's own name to
+    /// make the add an atomic replace. Without it, adding an existing name duplicates: the
+    /// client's name registry points at the newest copy and the old one becomes unaddressable.</summary>
+    public static void BeginElement(StringBuilder sb, ref int count, string name, string parent, bool update, string destroy = null)
     {
         if (count > 0)
             sb.Append(',');
@@ -33,6 +36,12 @@ internal static class MenuJson
         {
             sb.Append(",\"parent\":\"");
             Escape(sb, parent);
+            sb.Append('"');
+        }
+        if (destroy is not null)
+        {
+            sb.Append(",\"destroyUi\":\"");
+            Escape(sb, destroy);
             sb.Append('"');
         }
         if (update)

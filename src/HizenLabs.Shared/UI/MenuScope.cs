@@ -17,9 +17,10 @@ public readonly struct MenuScope
         Container = container;
     }
 
-    /// <summary>A pure positioning container (no visual) - section bounds, slots, spacers.</summary>
-    public MenuScope AddContainer(MenuPosition position, MenuOffset offset, string name = "") =>
-        new(_menu, _menu.CreateContainer(Container, position, offset, name));
+    /// <summary>A pure positioning container (no visual) - section bounds, slots, spacers.
+    /// replace makes the add destroy any same-named predecessor first (see Menu.CreateContainer).</summary>
+    public MenuScope AddContainer(MenuPosition position, MenuOffset offset, string name = "", bool replace = false) =>
+        new(_menu, _menu.CreateContainer(Container, position, offset, name, replace));
 
     public MenuScope AddPanel(MenuPosition position, MenuOffset offset, Color color, string name = "", bool needsCursor = false, bool needsKeyboard = false) =>
         new(_menu, _menu.CreatePanel(Container, position, offset, color, name, needsCursor, needsKeyboard));

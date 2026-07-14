@@ -73,8 +73,9 @@ public readonly struct AppLayout
 
     /// <summary>
     /// Binds a page inside an ALREADY-OPEN AppLayout, with no shell attached - sending replaces
-    /// just the page and the chrome never flickers (re-adding a name destroys the previous
-    /// subtree client-side). Create the page menu with its own id, nested under the app's:
+    /// just the page and the chrome never flickers. The three page roots destroy their previous
+    /// copies as part of their own add, so a page send atomically swaps out everything the last
+    /// page put in them. Create the page menu with its own id, nested under the app's:
     /// <code>
     /// using var menu = Menu.Create(this, "myplugin.main.page");
     /// var page = AppLayout.CreatePage(menu, "myplugin.main");
@@ -82,17 +83,17 @@ public readonly struct AppLayout
     /// menu.Send(player);
     /// </code>
     /// The page id must NOT be the app menu id itself: auto-generated element names are
-    /// prefixed by the menu id, and a page send reusing the app's prefix would re-add (and so
-    /// destroy) elements from the shell open, like the title.
+    /// prefixed by the menu id, and a page send reusing the app's prefix would collide with
+    /// elements from the shell open, like the title.
     /// </summary>
     public static Page CreatePage(Menu menu, string appMenuId)
     {
         var header = menu.Scope(new MenuContainer(appMenuId + ".header"))
-            .AddContainer(MenuPosition.Full, MenuOffset.Zero, menu.Id + ".header");
+            .AddContainer(MenuPosition.Full, MenuOffset.Zero, menu.Id + ".header", replace: true);
         var content = menu.Scope(new MenuContainer(appMenuId + ".content"))
-            .AddContainer(MenuPosition.Full, MenuOffset.Zero, menu.Id);
+            .AddContainer(MenuPosition.Full, MenuOffset.Zero, menu.Id, replace: true);
         var footer = menu.Scope(new MenuContainer(appMenuId + ".footer"))
-            .AddContainer(MenuPosition.Full, MenuOffset.Zero, menu.Id + ".footer");
+            .AddContainer(MenuPosition.Full, MenuOffset.Zero, menu.Id + ".footer", replace: true);
         return new Page(header, content, footer);
     }
 

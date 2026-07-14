@@ -4,10 +4,13 @@ namespace HizenLabs.Shared.UI;
 
 /// <summary>
 /// Server-side record of who has a menu open and which page they are viewing. The client's UI
-/// state cannot be queried, so this is the authority: record on every send, clear when the
-/// close command fires and on disconnect. For the record to stay accurate the menu's close
-/// button must notify the server - pass a closeCommand to the layout (see AppLayout.Create)
-/// and clear the player in its handler.
+/// state cannot be queried, so this is the authority: record on every send that Menu.Send
+/// reports as delivered, clear when the close command fires and on disconnect. For the record
+/// to stay accurate the menu's close button must notify the server - pass a closeCommand to
+/// the layout (see AppLayout.Create) and clear the player in its handler. The record can still
+/// go stale (a close command that never lands), so a user-initiated open should not trust it:
+/// the generated CommandShow* handlers force a full shell re-send, which is safe because shell
+/// roots replace themselves client-side.
 ///
 /// The page type is the plugin's own enum, so lookups are typed and allocation-free. One
 /// instance per menu, held for the plugin's lifetime:

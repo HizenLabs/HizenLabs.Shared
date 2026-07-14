@@ -339,22 +339,27 @@ public static class MenuWire
             sb.Append($"    /// <summary>Who has the {n} menu open and which page they see.</summary>\n");
             sb.Append($"    private readonly MenuViewers<{n}Page> {n}Viewers = new();\n\n");
 
-            sb.Append($"    /// <summary>Shows the {n} menu on the given page. The shell is sent only when the\n");
-            sb.Append($"    /// menu is not already open; the page goes out as its own send.</summary>\n");
-            sb.Append($"    private void Show{n}(BasePlayer player, {n}Page page = default)\n    {{\n");
-            sb.Append($"        if (!{n}Viewers.IsOpen(player))\n        {{\n");
+            sb.Append($"    /// <summary>Shows the {n} menu on the given page. resend forces the shell out even\n");
+            sb.Append("    /// when the menu is tracked as open (the shell's root replaces itself client-side, so\n");
+            sb.Append("    /// this heals a stale record); page navigation inside the open menu skips the shell.\n");
+            sb.Append("    /// The viewer is tracked only when the sends actually reach the client.</summary>\n");
+            sb.Append($"    private void Show{n}(BasePlayer player, {n}Page page = default, bool resend = false)\n    {{\n");
+            sb.Append("        if (player == null || player.net?.connection == null)\n");
+            sb.Append("            return;\n\n");
+            sb.Append($"        if (resend || !{n}Viewers.IsOpen(player))\n        {{\n");
             sb.Append($"            using var menu = Menu.Create(this, {n}MenuId);\n");
             sb.Append($"            menu.CloseCommand = \"{menu.Id}.close\";\n");
             sb.Append($"            {menu.Builder}(menu);\n");
-            sb.Append("            menu.Send(player);\n        }\n\n");
+            sb.Append("            if (!menu.Send(player))\n");
+            sb.Append("                return;\n        }\n\n");
             sb.Append($"        using var pageMenu = Menu.Create(this, {n}PageId);\n");
             sb.Append($"        var scope = {menu.LayoutType}.CreatePage(pageMenu, {n}MenuId);\n");
             sb.Append("        switch (page)\n        {\n");
             foreach (var page in menu.Pages)
                 sb.Append($"            case {n}Page.{page.Name}: {page.Builder}(player, scope); break;\n");
             sb.Append("        }\n\n");
-            sb.Append("        pageMenu.Send(player);\n");
-            sb.Append($"        {n}Viewers.SetPage(player, page);\n    }}\n\n");
+            sb.Append("        if (pageMenu.Send(player))\n");
+            sb.Append($"            {n}Viewers.SetPage(player, page);\n    }}\n\n");
 
             sb.Append($"    private void Close{n}(BasePlayer player)\n    {{\n");
             sb.Append($"        Menu.Close(player, {n}MenuId);\n");
@@ -368,8 +373,12 @@ public static class MenuWire
 
             if (menu.Command is not null)
             {
+                sb.Append("    // resend: a user-initiated open must not trust the open-menu tracking - if the\n");
+                sb.Append("    // client lost the menu while the record says open, a tracked-open send would skip\n");
+                sb.Append("    // the shell and the page would parent into nothing. The full send is safe because\n");
+                sb.Append("    // the shell root replaces itself client-side.\n");
                 sb.Append($"    private void CommandShow{n}(BasePlayer player, string command, string[] args)\n    {{\n");
-                sb.Append($"        Show{n}(player);\n    }}\n\n");
+                sb.Append($"        Show{n}(player, resend: true);\n    }}\n\n");
             }
         }
 
@@ -378,14 +387,14 @@ public static class MenuWire
             sb.Append($"        {menu.Name}Viewers.Remove(player);\n");
         sb.Append("    }\n\n");
 
+        sb.Append("    // Closes for every player, tracked or not: the tracking can be stale, and destroying\n");
+        sb.Append("    // an id the client does not have is a no-op.\n");
         sb.Append("    private void Menu_Unload()\n    {\n");
         sb.Append("        foreach (var player in BasePlayer.activePlayerList)\n        {\n");
-        for (var i = 0; i < menus.Count; i++)
+        foreach (var menu in menus)
         {
-            if (i > 0)
-                sb.Append('\n');
-            sb.Append($"            if ({menus[i].Name}Viewers.Remove(player))\n");
-            sb.Append($"                Menu.Close(player, {menus[i].Name}MenuId);\n");
+            sb.Append($"            {menu.Name}Viewers.Remove(player);\n");
+            sb.Append($"            Menu.Close(player, {menu.Name}MenuId);\n");
         }
         sb.Append("        }\n    }\n");
 

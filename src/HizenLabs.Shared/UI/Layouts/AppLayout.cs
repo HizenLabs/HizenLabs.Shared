@@ -21,8 +21,8 @@ namespace HizenLabs.Shared.UI.Layouts;
 ///
 /// Refresh granularity, cheapest wins: a named element takes an Update* patch; the current
 /// page swaps via <see cref="CreatePage"/> without touching the chrome; the full shell only
-/// goes out when the menu is not already open (track that server-side - see MenuViewers -
-/// and pass closeCommand so the X button keeps the tracking honest).
+/// goes out when the menu is not already open. Track open menus server-side with MenuViewers
+/// and pass closeCommand so close clicks reach the tracking.
 /// </summary>
 public readonly struct AppLayout
 {
@@ -42,8 +42,8 @@ public readonly struct AppLayout
         Footer = menu.Scope(shell.Footer);
     }
 
-    /// <summary>closeCommand runs server-side when the close button is clicked (the close
-    /// itself stays client-side) - the signal viewer tracking needs to stay accurate.</summary>
+    /// <summary>closeCommand runs server-side when the close button is clicked; the close
+    /// itself stays client-side.</summary>
     public static AppLayout Create(Menu menu, Menu.Layer layer = Menu.Layer.Overlay, bool closeButton = true, string closeCommand = null)
     {
         var shell = GetShell(layer, menu.Id, closeButton, closeCommand);

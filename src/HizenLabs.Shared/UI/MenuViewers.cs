@@ -41,8 +41,7 @@ public class MenuViewers<TPage> where TPage : struct, System.Enum
     /// <summary>Clears the player's record. Returns true if they were tracked as open.</summary>
     public bool Remove(BasePlayer player) => _pages.Remove(player.userID);
 
-    /// <summary>Whether anyone is viewing the given page - the cheap guard before building an
-    /// update menu nobody would receive.</summary>
+    /// <summary>Whether anyone is viewing the given page.</summary>
     public bool AnyOn(TPage page)
     {
         foreach (var entry in _pages)

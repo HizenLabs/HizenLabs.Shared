@@ -279,9 +279,9 @@ public class Menu : IDisposable, Pool.IPooled
 
     /// <summary>
     /// The standard close button: a square sized to its bar (height minus 2x padding),
-    /// vertically centered, inset from the right, closing the target CLIENT-side (no round-trip,
-    /// so the menu vanishes even under lag). Pass a command when the server must know about the
-    /// close (viewer tracking) - the client runs both, and the handler only updates state.
+    /// vertically centered, inset from the right, closing the target CLIENT-side (no
+    /// round-trip). Pass a command to also notify the server of the close; the client
+    /// runs both.
     /// </summary>
     public MenuContainer CreateCloseButton(MenuContainer parent, string closeTarget, float barHeight, float inset = 20f, float padding = 10f, string command = null)
     {

@@ -316,7 +316,8 @@ public static class MenuWire
         sb.Append("//     Menu wiring bootstrapped from the plugin's [MenuLayout]/[MenuPage] methods.\n");
         sb.Append("// </auto-generated>\n");
         sb.Append("using HizenLabs.Shared.UI;\n");
-        sb.Append("using HizenLabs.Shared.UI.Layouts;\n\n");
+        sb.Append("using HizenLabs.Shared.UI.Layouts;\n");
+        sb.Append("using UnityEngine;\n\n");
         if (ns is not null)
             sb.Append($"namespace {ns};\n\n");
         sb.Append($"public partial class {pluginName}\n{{\n");

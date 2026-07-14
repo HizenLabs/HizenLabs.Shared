@@ -18,6 +18,11 @@ namespace HizenLabs.Shared.UI.Layouts;
 /// </code>
 /// A label that refreshes (server time) gets a stable name and a plugin timer that sends
 /// menu.UpdateText(MenuId.ServerTime, ...) - refreshing content never re-sends the shell.
+///
+/// Refresh granularity, cheapest wins: a named element takes an Update* patch; the current
+/// page swaps via <see cref="CreatePage"/> without touching the chrome; the full shell only
+/// goes out when the menu is not already open (track that server-side - see MenuViewers -
+/// and pass closeCommand so the X button keeps the tracking honest).
 /// </summary>
 public readonly struct AppLayout
 {
@@ -37,11 +42,34 @@ public readonly struct AppLayout
         Footer = menu.Scope(shell.Footer);
     }
 
-    public static AppLayout Create(Menu menu, Menu.Layer layer = Menu.Layer.Overlay, bool closeButton = true)
+    /// <summary>closeCommand runs server-side when the close button is clicked (the close
+    /// itself stays client-side) - the signal viewer tracking needs to stay accurate.</summary>
+    public static AppLayout Create(Menu menu, Menu.Layer layer = Menu.Layer.Overlay, bool closeButton = true, string closeCommand = null)
     {
-        var shell = GetShell(layer, menu.Id, closeButton);
+        var shell = GetShell(layer, menu.Id, closeButton, closeCommand);
         menu.AttachShell(shell.Payload);
         return new AppLayout(menu, shell);
+    }
+
+    /// <summary>
+    /// Binds a page inside an ALREADY-OPEN AppLayout: a container filling the content region,
+    /// named after the page menu's id, with no shell attached - sending replaces just the page
+    /// and the chrome never flickers (re-adding the name destroys the previous page subtree
+    /// client-side). Create the page menu with its own id, nested under the app's:
+    /// <code>
+    /// using var menu = Menu.Create(this, MenuId.Page);            // "myplugin.main.page"
+    /// var page = AppLayout.CreatePage(menu, MenuId.Main);         // under "myplugin.main"
+    /// page.AddText(...);
+    /// menu.Send(player);
+    /// </code>
+    /// The page id must NOT be the app menu id itself: auto-generated element names are
+    /// prefixed by the menu id, and a page send reusing the app's prefix would re-add (and so
+    /// destroy) elements from the shell open, like the title.
+    /// </summary>
+    public static MenuScope CreatePage(Menu menu, string appMenuId)
+    {
+        return menu.Scope(new MenuContainer(appMenuId + ".content"))
+            .AddContainer(MenuPosition.Full, MenuOffset.Zero, menu.Id);
     }
 
     /// <summary>The header's main title (22pt bold, left-aligned in its slot).</summary>
@@ -70,11 +98,11 @@ public readonly struct AppLayout
         public string Summary;
     }
 
-    private static readonly Dictionary<(Menu.Layer, string, bool), Shell> _shells = new();
+    private static readonly Dictionary<(Menu.Layer, string, bool, string), Shell> _shells = new();
 
-    private static Shell GetShell(Menu.Layer layer, string menuId, bool closeButton)
+    private static Shell GetShell(Menu.Layer layer, string menuId, bool closeButton, string closeCommand)
     {
-        var key = (layer, menuId, closeButton);
+        var key = (layer, menuId, closeButton, closeCommand);
         if (_shells.TryGetValue(key, out var shell))
             return shell;
 
@@ -104,7 +132,7 @@ public readonly struct AppLayout
 
             if (closeButton)
             {
-                header.AddCloseButton(closeTarget: menuId, barHeight: 54.44f);
+                header.AddCloseButton(closeTarget: menuId, barHeight: 54.44f, command: closeCommand);
             }
 
             // Content between the bars (pure container - children paint it).

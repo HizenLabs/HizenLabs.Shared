@@ -279,17 +279,22 @@ public class Menu : IDisposable, Pool.IPooled
 
     /// <summary>
     /// The standard close button: a square sized to its bar (height minus 2x padding),
-    /// vertically centered, inset from the right, closing the target CLIENT-side (no command,
-    /// no server round-trip - pair with a command via CreateButton when the server must know).
+    /// vertically centered, inset from the right, closing the target CLIENT-side (no round-trip,
+    /// so the menu vanishes even under lag). Pass a command when the server must know about the
+    /// close (viewer tracking) - the client runs both, and the handler only updates state.
     /// </summary>
-    public MenuContainer CreateCloseButton(MenuContainer parent, string closeTarget, float barHeight, float inset = 20f, float padding = 10f)
+    public MenuContainer CreateCloseButton(MenuContainer parent, string closeTarget, float barHeight, float inset = 20f, float padding = 10f, string command = null)
     {
         var half = (barHeight - padding * 2f) / 2f;
         var name = parent.Id + ".close";
 
+#if CARBON
+        if (command is not null)
+            command = Carbon.Community.Protect(command);
+#endif
         MenuJson.BeginElement(_sb, ref _count, name, parent.Id, update: false);
         MenuJson.Rect(_sb, new MenuPosition(1f, 0.5f, 1f, 0.5f), new MenuOffset(-inset - half * 2f, -half, -inset, half));
-        MenuJson.Button(_sb, command: null, MenuTheme.ButtonBackground, close: closeTarget);
+        MenuJson.Button(_sb, command, MenuTheme.ButtonBackground, close: closeTarget);
         MenuJson.EndElement(_sb);
 
         CreateText(new MenuContainer(name), MenuPosition.Full, MenuOffset.Zero, "\u2715", 14, MenuTheme.ButtonText, TextAnchor.MiddleCenter, MenuTheme.TitleFont, name + ".x");

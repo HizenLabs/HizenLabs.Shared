@@ -67,7 +67,7 @@ public static class Bundler
         allTrees.AddRange(sharedTrees);
 
         foreach (var tree in allTrees)
-            ValidatePlatformSplits(tree);
+            ValidatePlatformSplits(tree, opts);
 
         var analysisRefs = TpaRefs();
         var compilation = CSharpCompilation.Create(
@@ -111,7 +111,7 @@ public static class Bundler
             {
                 if (decl.Parent is TypeDeclarationSyntax)
                     continue;
-                if (decl.Identifier.Text == opts.BaseMarker)
+                if (opts.Markers.Any(m => m.Name == decl.Identifier.Text))
                     continue;
                 if (model.GetDeclaredSymbol(decl) is not INamedTypeSymbol sym)
                     continue;
@@ -429,7 +429,7 @@ public static class Bundler
     /// such a declaration occupies the same source span under both parses, which is exactly
     /// what this check verifies.
     /// </summary>
-    private static void ValidatePlatformSplits(SyntaxTree bareTree)
+    private static void ValidatePlatformSplits(SyntaxTree bareTree, TransformOptions opts)
     {
         var text = bareTree.GetText().ToString();
         if (!text.Contains("#if"))
@@ -452,9 +452,10 @@ public static class Bundler
                 broken.Add(name);
         }
 
-        // The marker base is exempt: it is never inlined - the transform swaps it for a
+        // Marker types are exempt: they are never inlined - the transform swaps each for a
         // platform-split using alias.
-        broken.Remove("PluginBase");
+        foreach (var marker in opts.Markers)
+            broken.Remove(marker.Name);
         if (broken.Count == 0)
             return;
 

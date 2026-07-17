@@ -38,16 +38,29 @@ public sealed class TransformContext
     }
 }
 
+/// <summary>
+/// A shared marker type that is never inlined: every reference in the bundle is satisfied by a
+/// platform-split using alias to the given targets (see <see cref="MarkerAliasTransform"/>).
+/// Targets are written exactly as the alias's right-hand side, so global-namespace types are
+/// bare names and namespaced types are fully qualified.
+/// </summary>
+public sealed record TypeMarker(string Name, string CarbonTarget, string OxideTarget);
+
 /// <summary>Naming knobs for the platform split. Defaults are Carbon/Oxide for Rust.</summary>
 public sealed class TransformOptions
 {
     public string CarbonNamespace { get; init; } = "Carbon.Plugins";
     public string OxideNamespace { get; init; } = "Oxide.Plugins";
-    public string CarbonBase { get; init; } = "CarbonPlugin";
-    public string OxideBase { get; init; } = "RustPlugin";
 
-    /// <summary>The shared marker base the author derives from; swapped for the platform base.</summary>
-    public string BaseMarker { get; init; } = "PluginBase";
+    /// <summary>The marker types the shared library declares for dev-time compiles only; the
+    /// bundle aliases each to its platform target instead of inlining it. PluginBase is the
+    /// plugin's base class; MenuCommandAttribute is the platform's UI command attribute
+    /// (protected under Carbon, plain console under Oxide).</summary>
+    public IReadOnlyList<TypeMarker> Markers { get; init; } = new[]
+    {
+        new TypeMarker("PluginBase", "Carbon.Plugins.CarbonPlugin", "Oxide.Plugins.RustPlugin"),
+        new TypeMarker("MenuCommandAttribute", "ProtectedCommandAttribute", "Oxide.Plugins.ConsoleCommandAttribute"),
+    };
 
     /// <summary>Namespace the marker base lives in. Its usings are dropped from the bundle (the
     /// marker is swapped for the platform base, so the import is dead).</summary>

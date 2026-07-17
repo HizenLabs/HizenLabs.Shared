@@ -74,6 +74,21 @@ foreach ($inst in Resolve-Instances -Mod $Mod -Branch $Branch) {
     New-Item -ItemType Directory -Force -Path $temp | Out-Null
 
     # --- game ---------------------------------------------------------------
+    # A failed update job (e.g. files held open by another process mid-update)
+    # writes the corrupt bit (0x80) into the app manifest. SteamCMD then re-reads
+    # that state on every later run and aborts with 0x486 before doing any work,
+    # so no rerun or validate can recover it. Reset the instance's steamapps
+    # folder to force a clean re-acquire; the world, cfg and mod data live
+    # outside steamapps and are untouched.
+    $manifest = Join-Path $p.Server 'steamapps\appmanifest_258550.acf'
+    if (Test-Path $manifest) {
+        $m = Select-String -Path $manifest -Pattern '"StateFlags"\s+"(\d+)"' | Select-Object -First 1
+        if ($m -and (([int]$m.Matches[0].Groups[1].Value) -band 0x80)) {
+            Write-Host "App manifest for $inst has the corrupt flag set (StateFlags $($m.Matches[0].Groups[1].Value)); resetting steamapps for a clean re-acquire..." -ForegroundColor Yellow
+            Remove-Item (Join-Path $p.Server 'steamapps') -Recurse -Force -ErrorAction Stop
+        }
+    }
+
     # staging instances use the Rust staging beta; debug is always staging too (it's
     # the debugger/local-build flavor of staging); release uses the public branch.
     $gameBranch = if ($p.Branch -eq 'debug') { $script:CarbonDebugGameBeta } else { $p.Branch }

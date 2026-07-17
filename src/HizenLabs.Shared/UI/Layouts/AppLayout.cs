@@ -34,6 +34,14 @@ public readonly struct AppLayout
     private const float CloseInset = 10f;
     private const float SlotGap = 8f;
 
+    /// <summary>Slot-0 start when the close button is present - the page-level button helper
+    /// assumes it is (the layout-level one reads the shell's actual value).</summary>
+    private const float DefaultActionsRight = CloseInset + (BarHeight - ControlPadding * 2f) + SlotGap;
+
+    // The header's title slot, shared by the shell build and the page-level SetTitle.
+    private const float TitleLeft = 20f;
+    private const float TitleRight = 210f;
+
     public readonly MenuScope Header;
     public readonly MenuScope Content;
     public readonly MenuScope Footer;
@@ -76,6 +84,34 @@ public readonly struct AppLayout
             Header = header;
             Content = content;
             Footer = footer;
+        }
+
+        /// <summary>
+        /// The header title owned by THIS page, drawn in the same slot as the layout-level
+        /// <see cref="AppLayout.SetTitle"/>. Use one or the other per menu: a page title on
+        /// top of a layout title overlaps.
+        /// </summary>
+        public Page SetTitle(string title)
+        {
+            Header.AddText(new MenuPosition(0f, 0f, 0f, 1f), new MenuOffset(TitleLeft, 0f, TitleRight, 0f),
+                title, 22, MenuTheme.TitleText, TextAnchor.MiddleLeft, MenuTheme.TitleFont);
+            return this;
+        }
+
+        /// <summary>
+        /// A header-bar action button owned by THIS page: swapping pages replaces it with the
+        /// next page's set, so each page declares its own buttons. Same slot geometry as the
+        /// layout-level <see cref="AppLayout.AddHeaderButton"/> (slot 0 just left of the close
+        /// button, walking left) - the two share the row, so a menu-level button and a page
+        /// button in the same slot overlap.
+        /// </summary>
+        public Page AddHeaderButton(int slot, string label, string command, float width = 90f)
+        {
+            var half = (BarHeight - ControlPadding * 2f) / 2f;
+            var right = -(DefaultActionsRight + slot * (width + SlotGap));
+            Header.AddButton(MenuPosition.MiddleRight, new MenuOffset(right - width, -half, right, half), command, MenuTheme.ButtonBackground)
+                .AddText(MenuPosition.Full, MenuOffset.Zero, label, MenuTheme.ButtonFontSize, MenuTheme.ButtonText, font: MenuTheme.TitleFont);
+            return this;
         }
     }
 
@@ -178,7 +214,7 @@ public readonly struct AppLayout
 
             // Header strip: title + summary slots, bottom divider, close button.
             var header = window.AddContainer(new MenuPosition(0f, 1f, 1f, 1f), new MenuOffset(0f, -BarHeight, 0f, 0f), shell.Header);
-            header.AddContainer(new MenuPosition(0f, 0f, 0f, 1f), new MenuOffset(20f, 0f, 210f, 0f), shell.Title);
+            header.AddContainer(new MenuPosition(0f, 0f, 0f, 1f), new MenuOffset(TitleLeft, 0f, TitleRight, 0f), shell.Title);
             header.AddContainer(new MenuPosition(0f, 0f, 0f, 1f), new MenuOffset(217.78f, 0f, 551.11f, 0f), shell.Summary);
             header.AddPanel(new MenuPosition(0f, 0f, 1f, 0f), new MenuOffset(0f, 0f, 0f, 1f), MenuTheme.Border);
 

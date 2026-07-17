@@ -386,41 +386,52 @@ public class Menu : IDisposable, Pool.IPooled
     }
 
     /// <summary>
-    /// A row of mutually exclusive options with the active segment highlighted. Each segment
-    /// runs the command with its index as the argument ("cmd 2"); the handler stores the
-    /// selection and patches the highlight via <see cref="UpdateSegmented"/>.
+    /// A row of mutually exclusive options - equal-width slices of the control's box with the
+    /// active one highlighted. Clicking segment i runs "command i". The whole loop, using a
+    /// per-player state bag (see MenuViewers) so each viewer keeps their own selection:
+    /// <code>
+    /// // page builder: the active index comes from state
+    /// page.Content.AddSegmented(pos, off, Filters, state.Filter, Cmd.Filter);
+    ///
+    /// // [MenuCommand(Cmd.Filter)] handler: store the index, re-show the page - the rebuild
+    /// // draws the new highlight AND any content that depends on the filter.
+    /// MainViewers.State(player).Filter = arg.GetInt(0);
+    /// ShowMain(player, MainPage.Logs);
+    /// </code>
+    /// <see cref="UpdateSegmented"/> is only the no-rebuild optimization: patch the highlight
+    /// in place when nothing else on the page depends on the selection.
     /// </summary>
-    public MenuContainer CreateSegmented(MenuContainer parent, MenuPosition position, MenuOffset offset, string[] options, int active, string command, string name = "")
+    public MenuContainer CreateSegmented(MenuContainer parent, MenuPosition position, MenuOffset offset, string[] options, int active, string command, string name = "", float gap = 2f)
     {
         name = EnsureName(name);
         var control = CreateContainer(parent, position, offset, name);
         for (var i = 0; i < options.Length; i++)
         {
             var segment = $"{name}.seg{i}";
-            CreatePanel(control, SegmentPosition(i, options.Length), SegmentInset(i, options.Length), i == active ? MenuTheme.ButtonActiveBackground : MenuTheme.ButtonBackground, segment);
+            CreatePanel(control, SegmentPosition(i, options.Length), SegmentInset(i, options.Length, gap), i == active ? MenuTheme.ButtonActiveBackground : MenuTheme.ButtonBackground, segment);
             CreateText(segment, MenuPosition.Full, MenuOffset.Zero, options[i], MenuTheme.ButtonFontSize, i == active ? MenuTheme.TitleText : MenuTheme.ButtonText, font: MenuTheme.TitleFont, name: segment + ".label");
-            CreateButton(control, SegmentPosition(i, options.Length), SegmentInset(i, options.Length), $"{command} {i}", Color.clear, segment + ".hit");
+            CreateButton(control, SegmentPosition(i, options.Length), SegmentInset(i, options.Length, gap), $"{command} {i}", Color.clear, segment + ".hit");
         }
         return control;
     }
 
-    public void UpdateSegmented(MenuContainer segmented, string[] options, int active)
+    public void UpdateSegmented(MenuContainer segmented, string[] options, int active, float gap = 2f)
     {
         for (var i = 0; i < options.Length; i++)
         {
             var segment = $"{segmented.Id}.seg{i}";
-            UpdatePanel(segment, SegmentPosition(i, options.Length), SegmentInset(i, options.Length), i == active ? MenuTheme.ButtonActiveBackground : MenuTheme.ButtonBackground);
+            UpdatePanel(segment, SegmentPosition(i, options.Length), SegmentInset(i, options.Length, gap), i == active ? MenuTheme.ButtonActiveBackground : MenuTheme.ButtonBackground);
             UpdateText(segment + ".label", options[i], MenuTheme.ButtonFontSize, i == active ? MenuTheme.TitleText : MenuTheme.ButtonText, font: MenuTheme.TitleFont);
         }
     }
 
-    /// <summary>Equal fractional slice of the control for segment i, with a 1px gap between
-    /// neighbors (see SegmentInset).</summary>
+    /// <summary>Equal fractional slice of the control for segment i; SegmentInset then shaves
+    /// half the gap off each inner edge, so neighbors sit gap pixels apart.</summary>
     private static MenuPosition SegmentPosition(int index, int count) =>
         new((float)index / count, 0f, (index + 1f) / count, 1f);
 
-    private static MenuOffset SegmentInset(int index, int count) =>
-        new(index == 0 ? 0f : 1f, 0f, index == count - 1 ? 0f : -1f, 0f);
+    private static MenuOffset SegmentInset(int index, int count, float gap) =>
+        new(index == 0 ? 0f : gap / 2f, 0f, index == count - 1 ? 0f : -gap / 2f, 0f);
 
     #endregion
 

@@ -36,4 +36,10 @@ public sealed class MenuLayoutAttribute : Attribute
     /// <summary>Name of the CommandSetting property in the plugin's config that opens this
     /// menu. Registration is generated the same way as [ConfigCommand].</summary>
     public string Command { get; set; }
+
+    /// <summary>Per-player view-state class for this menu (active filter, list page, selected
+    /// item - anything sends must share while the menu is open). The generated viewers field
+    /// becomes MenuViewers&lt;Page, State&gt;; read/write via Viewers.State(player). The class
+    /// must implement Pool.IPooled and reset its fields in EnterPool.</summary>
+    public System.Type State { get; set; }
 }

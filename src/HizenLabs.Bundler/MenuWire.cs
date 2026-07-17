@@ -38,6 +38,7 @@ public static class MenuWire
         public string Builder;
         public string LayoutType;
         public string Command;
+        public string StateType;
         public string FilePath;
         public List<PageModel> Pages = new();
     }
@@ -236,6 +237,7 @@ public static class MenuWire
             Builder = method.Identifier.Text,
             LayoutType = layoutType,
             Command = NamedArg(attr, "Command"),
+            StateType = TypeArg(attr, "State"),
             FilePath = path,
         };
     }
@@ -337,8 +339,11 @@ public static class MenuWire
             sb.Append($"    /// <summary>Element namespace of {n} page sends.</summary>\n");
             sb.Append($"    private const string {n}PageId = \"{menu.Id}.page\";\n\n");
 
-            sb.Append($"    /// <summary>Who has the {n} menu open and which page they see.</summary>\n");
-            sb.Append($"    private readonly MenuViewers<{n}Page> {n}Viewers = new();\n\n");
+            var viewersType = menu.StateType is null
+                ? $"MenuViewers<{n}Page>"
+                : $"MenuViewers<{n}Page, {menu.StateType}>";
+            sb.Append($"    /// <summary>Who has the {n} menu open and which page they see{(menu.StateType is null ? "" : ", plus their per-player view state (State(player))")}.</summary>\n");
+            sb.Append($"    private readonly {viewersType} {n}Viewers = new();\n\n");
 
             sb.Append($"    /// <summary>Shows the {n} menu on the given page. resend forces the shell out even\n");
             sb.Append("    /// when the menu is tracked as open (the shell's root replaces itself client-side, so\n");
@@ -476,6 +481,18 @@ public static class MenuWire
             InvocationExpressionSyntax { Expression: IdentifierNameSyntax { Identifier.Text: "nameof" } } nameOf =>
                 LastIdentifier(nameOf.ArgumentList.Arguments.First().Expression),
             _ => throw new MenuWireException($"[{LayoutAttribute}/{PageAttribute}] {name}: expected nameof(...) or a string literal"),
+        };
+    }
+
+    /// <summary>A named argument's typeof(...) type text, or null when absent.</summary>
+    private static string TypeArg(AttributeSyntax attr, string name)
+    {
+        var arg = attr.ArgumentList?.Arguments.FirstOrDefault(a => a.NameEquals?.Name.Identifier.Text == name);
+        return arg?.Expression switch
+        {
+            null => null,
+            TypeOfExpressionSyntax typeOf => typeOf.Type.ToString(),
+            _ => throw new MenuWireException($"[{LayoutAttribute}] {name}: expected typeof(...)"),
         };
     }
 

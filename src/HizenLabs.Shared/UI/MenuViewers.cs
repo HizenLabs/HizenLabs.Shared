@@ -1,3 +1,4 @@
+using Facepunch;
 using System.Collections.Generic;
 
 namespace HizenLabs.Shared.UI;
@@ -42,7 +43,7 @@ public class MenuViewers<TPage> where TPage : struct, System.Enum
     public void SetPage(BasePlayer player, TPage page) => _pages[player.userID] = page;
 
     /// <summary>Clears the player's record. Returns true if they were tracked as open.</summary>
-    public bool Remove(BasePlayer player) => _pages.Remove(player.userID);
+    public virtual bool Remove(BasePlayer player) => _pages.Remove(player.userID);
 
     /// <summary>Whether anyone is viewing the given page.</summary>
     public bool AnyOn(TPage page)
@@ -77,5 +78,46 @@ public class MenuViewers<TPage> where TPage : struct, System.Enum
             if (_pages.ContainsKey(player.userID))
                 menu.Send(player);
         }
+    }
+}
+
+/// <summary>
+/// MenuViewers with a per-player state bag: view state that must survive between sends while
+/// the menu is open (active filter, list page, selected item) but is NOT persistent data.
+/// Declare the state class on the layout - <c>[MenuLayout(..., State = typeof(MyState))]</c> -
+/// and the generated viewers field carries it; page builders and command handlers read and
+/// write it through <see cref="State"/>:
+/// <code>
+/// // [MenuCommand] handler: mutate the state, then re-show the page - the rebuild reads it.
+/// MainViewers.State(player).Filter = arg.GetInt(0);
+/// ShowMain(player, MainPage.Logs);
+/// </code>
+/// The bag is pooled: it is created on first access and freed when the player's record clears
+/// (close command, disconnect, unload), so the state class MUST reset its fields in
+/// <c>EnterPool</c> - a stale field would leak one player's view state to the next.
+/// </summary>
+public class MenuViewers<TPage, TState> : MenuViewers<TPage>
+    where TPage : struct, System.Enum
+    where TState : class, Pool.IPooled, new()
+{
+    private readonly Dictionary<ulong, TState> _states = new();
+
+    /// <summary>The player's state bag, created on first access.</summary>
+    public TState State(BasePlayer player)
+    {
+        if (!_states.TryGetValue(player.userID, out var state))
+            _states[player.userID] = state = Pool.Get<TState>();
+        return state;
+    }
+
+    public override bool Remove(BasePlayer player)
+    {
+        if (_states.TryGetValue(player.userID, out var state))
+        {
+            _states.Remove(player.userID);
+            Pool.Free(ref state);
+        }
+
+        return base.Remove(player);
     }
 }

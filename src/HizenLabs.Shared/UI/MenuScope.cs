@@ -44,8 +44,8 @@ public readonly struct MenuScope
         _menu.CreateStepper(Container, position, offset, value, command, name, buttonWidth);
 
     /// <summary>A row of exclusive options (see <see cref="Menu.CreateSegmented"/>).</summary>
-    public MenuContainer AddSegmented(MenuPosition position, MenuOffset offset, string[] options, int active, string command, string name = "") =>
-        _menu.CreateSegmented(Container, position, offset, options, active, command, name);
+    public MenuContainer AddSegmented(MenuPosition position, MenuOffset offset, string[] options, int active, string command, string name = "", float gap = 2f) =>
+        _menu.CreateSegmented(Container, position, offset, options, active, command, name, gap);
 
     /// <summary>Four border panels around this scope.</summary>
     public MenuScope AddBorders(Color color, float thickness = 1f)

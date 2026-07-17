@@ -26,6 +26,14 @@ namespace HizenLabs.Shared.UI.Layouts;
 /// </summary>
 public readonly struct AppLayout
 {
+    // Header-bar geometry: controls are BarHeight minus 2x ControlPadding tall, vertically
+    // centered; the close button is a square of that size inset CloseInset from the right,
+    // and header action buttons walk further left from it with SlotGap between.
+    private const float BarHeight = 54.44f;
+    private const float ControlPadding = 10f;
+    private const float CloseInset = 10f;
+    private const float SlotGap = 8f;
+
     public readonly MenuScope Header;
     public readonly MenuScope Content;
     public readonly MenuScope Footer;
@@ -111,6 +119,21 @@ public readonly struct AppLayout
         return this;
     }
 
+    /// <summary>
+    /// A header-bar action button. Slot 0 sits just left of the close button (or at the bar's
+    /// right inset when the layout has no close button); higher slots walk further left. The
+    /// button is sized to the bar like the close button.
+    /// </summary>
+    public AppLayout AddHeaderButton(int slot, string label, string command, float width = 90f)
+    {
+        var half = (BarHeight - ControlPadding * 2f) / 2f;
+        var right = -(_shell.ActionsRight + slot * (width + SlotGap));
+        var button = _menu.CreateButton(_shell.Header, MenuPosition.MiddleRight,
+            new MenuOffset(right - width, -half, right, half), command, MenuTheme.ButtonBackground, _menu.Id + ".header.btn" + slot);
+        _menu.CreateText(button, MenuPosition.Full, MenuOffset.Zero, label, MenuTheme.ButtonFontSize, MenuTheme.ButtonText, font: MenuTheme.TitleFont);
+        return this;
+    }
+
     // ---- shell plumbing (one compile per key, immortal cache) ----
 
     private sealed class Shell
@@ -121,6 +144,9 @@ public readonly struct AppLayout
         public string Footer;
         public string Title;
         public string Summary;
+        /// <summary>Pixels from the panel's right edge to where header slot 0's right edge
+        /// starts (past the close button when the layout has one).</summary>
+        public float ActionsRight;
     }
 
     private static readonly Dictionary<(Menu.Layer, string, bool, string), Shell> _shells = new();
@@ -138,6 +164,7 @@ public readonly struct AppLayout
             Footer = menuId + ".footer",
             Title = menuId + ".title",
             Summary = menuId + ".summary",
+            ActionsRight = CloseInset + (closeButton ? (BarHeight - ControlPadding * 2f) + SlotGap : 0f),
         };
 
         shell.Payload = MenuShell.Build(menuId, menu =>
@@ -150,14 +177,14 @@ public readonly struct AppLayout
             var window = backdrop.AddPanel(MenuPosition.Center, new MenuOffset(-540f, -280f, 540f, 280f), MenuTheme.WindowBackground);
 
             // Header strip: title + summary slots, bottom divider, close button.
-            var header = window.AddContainer(new MenuPosition(0f, 1f, 1f, 1f), new MenuOffset(0f, -54.44f, 0f, 0f), shell.Header);
+            var header = window.AddContainer(new MenuPosition(0f, 1f, 1f, 1f), new MenuOffset(0f, -BarHeight, 0f, 0f), shell.Header);
             header.AddContainer(new MenuPosition(0f, 0f, 0f, 1f), new MenuOffset(20f, 0f, 210f, 0f), shell.Title);
             header.AddContainer(new MenuPosition(0f, 0f, 0f, 1f), new MenuOffset(217.78f, 0f, 551.11f, 0f), shell.Summary);
             header.AddPanel(new MenuPosition(0f, 0f, 1f, 0f), new MenuOffset(0f, 0f, 0f, 1f), MenuTheme.Border);
 
             if (closeButton)
             {
-                header.AddCloseButton(closeTarget: menuId, barHeight: 54.44f, command: closeCommand);
+                header.AddCloseButton(closeTarget: menuId, barHeight: BarHeight, inset: CloseInset, padding: ControlPadding, command: closeCommand);
             }
 
             // Content between the bars (pure container - children paint it).

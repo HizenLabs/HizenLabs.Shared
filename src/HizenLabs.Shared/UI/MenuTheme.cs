@@ -21,9 +21,15 @@ public static class MenuTheme
     public static readonly Color Watermark = new(0.388f, 0.388f, 0.388f, 0.2f);
 
     public static readonly Color ButtonBackground = new(0.173f, 0.173f, 0.173f, 1f);
+    public static readonly Color ButtonActiveBackground = new(0.25f, 0.25f, 0.25f, 1f);
     public static readonly Color ButtonText = new(0.71f, 0.71f, 0.71f, 1f);
+
+    /// <summary>Highlight for affirmative state: toggle-on tracks, primary actions.</summary>
+    public static readonly Color Accent = new(0.302f, 0.478f, 0.227f, 1f);
+    public static readonly Color AccentText = new(0.918f, 0.949f, 0.89f, 1f);
 
     public const MenuFont TitleFont = MenuFont.RobotoCondensedBold;
     public const int TitleFontSize = 18;
     public const int BodyFontSize = 14;
+    public const int ButtonFontSize = 12;
 }

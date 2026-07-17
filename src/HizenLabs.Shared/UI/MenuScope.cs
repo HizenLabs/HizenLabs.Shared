@@ -35,6 +35,18 @@ public readonly struct MenuScope
     public MenuScope AddButton(MenuPosition position, MenuOffset offset, string command, Color color, string name = "") =>
         new(_menu, _menu.CreateButton(Container, position, offset, command, color, name));
 
+    /// <summary>An on/off switch bound to a command (see <see cref="Menu.CreateToggle"/>).</summary>
+    public MenuContainer AddToggle(MenuPosition position, MenuOffset offset, bool isOn, string command, string name = "") =>
+        _menu.CreateToggle(Container, position, offset, isOn, command, name);
+
+    /// <summary>A minus/value/plus stepper (see <see cref="Menu.CreateStepper"/>).</summary>
+    public MenuContainer AddStepper(MenuPosition position, MenuOffset offset, string value, string command, string name = "", float buttonWidth = 30f) =>
+        _menu.CreateStepper(Container, position, offset, value, command, name, buttonWidth);
+
+    /// <summary>A row of exclusive options (see <see cref="Menu.CreateSegmented"/>).</summary>
+    public MenuContainer AddSegmented(MenuPosition position, MenuOffset offset, string[] options, int active, string command, string name = "") =>
+        _menu.CreateSegmented(Container, position, offset, options, active, command, name);
+
     /// <summary>Four border panels around this scope.</summary>
     public MenuScope AddBorders(Color color, float thickness = 1f)
     {

@@ -323,6 +323,100 @@ public class Menu : IDisposable, Pool.IPooled
         return new MenuContainer(name);
     }
 
+    #region Controls
+
+    // Composite controls: fixed combinations of panels, text, and an invisible hit button.
+    // Each control is a named container whose part names derive from its own, so the matching
+    // Update* method patches state in place - state changes never re-send the control.
+
+    private static readonly MenuPosition _knobOn = new(0.5f, 0f, 1f, 1f);
+    private static readonly MenuPosition _knobOff = new(0f, 0f, 0.5f, 1f);
+    private static readonly MenuOffset _knobInset = new(2f, 2f, -2f, -2f);
+
+    /// <summary>
+    /// An on/off switch: a colored track with a knob on the active side and an invisible hit
+    /// button running the command. The command carries no state - the handler flips its own
+    /// model and patches the visual via <see cref="UpdateToggle"/>, so the server stays
+    /// authoritative when clicks race.
+    /// </summary>
+    public MenuContainer CreateToggle(MenuContainer parent, MenuPosition position, MenuOffset offset, bool isOn, string command, string name = "")
+    {
+        name = EnsureName(name);
+        var control = CreateContainer(parent, position, offset, name);
+        CreatePanel(control, MenuPosition.Full, MenuOffset.Zero, isOn ? MenuTheme.Accent : MenuTheme.ButtonBackground, name + ".track");
+        CreatePanel(control, isOn ? _knobOn : _knobOff, _knobInset, isOn ? MenuTheme.AccentText : MenuTheme.MutedText, name + ".knob");
+        CreateButton(control, MenuPosition.Full, MenuOffset.Zero, command, Color.clear, name + ".hit");
+        return control;
+    }
+
+    public void UpdateToggle(MenuContainer toggle, bool isOn)
+    {
+        UpdatePanel(toggle.Id + ".track", MenuPosition.Full, MenuOffset.Zero, isOn ? MenuTheme.Accent : MenuTheme.ButtonBackground);
+        UpdatePanel(toggle.Id + ".knob", isOn ? _knobOn : _knobOff, _knobInset, isOn ? MenuTheme.AccentText : MenuTheme.MutedText);
+    }
+
+    /// <summary>
+    /// A numeric stepper: minus and plus buttons flanking a value box. The buttons run the
+    /// command with a trailing delta argument ("-1" / "1"); the handler applies the delta to
+    /// its model and patches the shown value via <see cref="UpdateStepper"/>.
+    /// </summary>
+    public MenuContainer CreateStepper(MenuContainer parent, MenuPosition position, MenuOffset offset, string value, string command, string name = "", float buttonWidth = 30f)
+    {
+        name = EnsureName(name);
+        var control = CreateContainer(parent, position, offset, name);
+        var dec = CreateButton(control, new MenuPosition(0f, 0f, 0f, 1f), new MenuOffset(0f, 0f, buttonWidth, 0f), command + " -1", MenuTheme.ButtonBackground, name + ".dec");
+        CreateText(dec, MenuPosition.Full, MenuOffset.Zero, "-", MenuTheme.BodyFontSize, MenuTheme.ButtonText, font: MenuTheme.TitleFont);
+        CreatePanel(control, MenuPosition.Full, new MenuOffset(buttonWidth, 0f, -buttonWidth, 0f), MenuTheme.WindowBackground, name + ".valuebg");
+        CreateText(name + ".valuebg", MenuPosition.Full, MenuOffset.Zero, value, MenuTheme.BodyFontSize, MenuTheme.TitleText, font: MenuFont.DroidSansMono, name: name + ".value");
+        var inc = CreateButton(control, new MenuPosition(1f, 0f, 1f, 1f), new MenuOffset(-buttonWidth, 0f, 0f, 0f), command + " 1", MenuTheme.ButtonBackground, name + ".inc");
+        CreateText(inc, MenuPosition.Full, MenuOffset.Zero, "+", MenuTheme.BodyFontSize, MenuTheme.ButtonText, font: MenuTheme.TitleFont);
+        return control;
+    }
+
+    public void UpdateStepper(MenuContainer stepper, string value)
+    {
+        UpdateText(stepper.Id + ".value", value, MenuTheme.BodyFontSize, MenuTheme.TitleText, font: MenuFont.DroidSansMono);
+    }
+
+    /// <summary>
+    /// A row of mutually exclusive options with the active segment highlighted. Each segment
+    /// runs the command with its index as the argument ("cmd 2"); the handler stores the
+    /// selection and patches the highlight via <see cref="UpdateSegmented"/>.
+    /// </summary>
+    public MenuContainer CreateSegmented(MenuContainer parent, MenuPosition position, MenuOffset offset, string[] options, int active, string command, string name = "")
+    {
+        name = EnsureName(name);
+        var control = CreateContainer(parent, position, offset, name);
+        for (var i = 0; i < options.Length; i++)
+        {
+            var segment = $"{name}.seg{i}";
+            CreatePanel(control, SegmentPosition(i, options.Length), SegmentInset(i, options.Length), i == active ? MenuTheme.ButtonActiveBackground : MenuTheme.ButtonBackground, segment);
+            CreateText(segment, MenuPosition.Full, MenuOffset.Zero, options[i], MenuTheme.ButtonFontSize, i == active ? MenuTheme.TitleText : MenuTheme.ButtonText, font: MenuTheme.TitleFont, name: segment + ".label");
+            CreateButton(control, SegmentPosition(i, options.Length), SegmentInset(i, options.Length), $"{command} {i}", Color.clear, segment + ".hit");
+        }
+        return control;
+    }
+
+    public void UpdateSegmented(MenuContainer segmented, string[] options, int active)
+    {
+        for (var i = 0; i < options.Length; i++)
+        {
+            var segment = $"{segmented.Id}.seg{i}";
+            UpdatePanel(segment, SegmentPosition(i, options.Length), SegmentInset(i, options.Length), i == active ? MenuTheme.ButtonActiveBackground : MenuTheme.ButtonBackground);
+            UpdateText(segment + ".label", options[i], MenuTheme.ButtonFontSize, i == active ? MenuTheme.TitleText : MenuTheme.ButtonText, font: MenuTheme.TitleFont);
+        }
+    }
+
+    /// <summary>Equal fractional slice of the control for segment i, with a 1px gap between
+    /// neighbors (see SegmentInset).</summary>
+    private static MenuPosition SegmentPosition(int index, int count) =>
+        new((float)index / count, 0f, (index + 1f) / count, 1f);
+
+    private static MenuOffset SegmentInset(int index, int count) =>
+        new(index == 0 ? 0f : 1f, 0f, index == count - 1 ? 0f : -1f, 0f);
+
+    #endregion
+
     public void UpdatePanel(MenuContainer target, MenuPosition position, MenuOffset offset, Color color)
     {
         MenuJson.BeginElement(_sb, ref _count, target.Id, parent: null, update: true);

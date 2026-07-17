@@ -8,6 +8,12 @@ using static Microsoft.CodeAnalysis.CSharp.SyntaxFactory;
 
 namespace HizenLabs.Bundler;
 
+/// <summary>A bundle input violates a bundler convention; the message says which and how to fix.</summary>
+public sealed class BundleException : Exception
+{
+    public BundleException(string message) : base(message) { }
+}
+
 public sealed record BundleRequest(
     string PluginPath,
     IReadOnlyList<string> SharedPaths,
@@ -59,6 +65,9 @@ public static class Bundler
         var sharedTrees = req.SharedPaths.Select(Parse).ToList();
         var allTrees = new List<SyntaxTree> { pluginTree };
         allTrees.AddRange(sharedTrees);
+
+        foreach (var tree in allTrees)
+            ValidatePlatformSplits(tree);
 
         var analysisRefs = TpaRefs();
         var compilation = CSharpCompilation.Create(
@@ -409,6 +418,66 @@ public static class Bundler
 
     private static SyntaxTree Parse(string path) =>
         CSharpSyntaxTree.ParseText(File.ReadAllText(path), path: path);
+
+    /// <summary>
+    /// Rejects a source file whose type DECLARATIONS differ between the platforms. The inliner
+    /// works from a single parse (no platform symbols), so a type declared once per #if branch
+    /// silently ships with only one branch's declaration - the shipped plugin then disagrees
+    /// with itself across platforms (a protected button paired with a raw-registered handler
+    /// dies silently on every click). The safe form declares the type ONCE and keeps the #if
+    /// inside the declaration (base list, members), which rides through parsing as trivia:
+    /// such a declaration occupies the same source span under both parses, which is exactly
+    /// what this check verifies.
+    /// </summary>
+    private static void ValidatePlatformSplits(SyntaxTree bareTree)
+    {
+        var text = bareTree.GetText().ToString();
+        if (!text.Contains("#if"))
+            return;
+
+        var carbonRoot = CSharpSyntaxTree.ParseText(text, new CSharpParseOptions(
+            LanguageVersion.Latest, preprocessorSymbols: new[] { "CARBON" })).GetRoot();
+
+        var bare = DeclarationSpans(bareTree.GetRoot());
+        var carbon = DeclarationSpans(carbonRoot);
+        var broken = new SortedSet<string>(StringComparer.Ordinal);
+        foreach (var (name, span) in bare)
+        {
+            if (!carbon.TryGetValue(name, out var other) || other != span)
+                broken.Add(name);
+        }
+        foreach (var name in carbon.Keys)
+        {
+            if (!bare.ContainsKey(name))
+                broken.Add(name);
+        }
+
+        // The marker base is exempt: it is never inlined - the transform swaps it for a
+        // platform-split using alias.
+        broken.Remove("PluginBase");
+        if (broken.Count == 0)
+            return;
+
+        throw new BundleException(
+            $"{Path.GetFileName(bareTree.FilePath)}: platform-dependent type declaration(s): {string.Join(", ", broken)}. " +
+            "The bundler inlines from a single parse, so only one #if branch of a declaration would ship. " +
+            "Declare the type once and move the #if inside the declaration (base list or members).");
+    }
+
+    /// <summary>Full source span (with trivia) per declared type name; partial parts concatenate
+    /// in source order, so a legitimate multi-part type still compares stably.</summary>
+    private static Dictionary<string, string> DeclarationSpans(SyntaxNode root)
+    {
+        var spans = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var decl in root.DescendantNodes().OfType<BaseTypeDeclarationSyntax>())
+        {
+            var name = decl.Identifier.Text;
+            spans[name] = spans.TryGetValue(name, out var existing)
+                ? existing + decl.ToFullString()
+                : decl.ToFullString();
+        }
+        return spans;
+    }
 
     /// <summary>Provenance label for a merged part: the last two path segments of its source file
     /// (e.g. "UI/Menu.Carbon.cs"), shown as a #region around the part's content.</summary>

@@ -70,13 +70,22 @@ static int Bundle(string[] args)
         .Distinct(StringComparer.OrdinalIgnoreCase)
         .ToList();
 
-    var result = Bundler.Bundle(new BundleRequest(
-        plugin,
-        sharedFiles,
-        Transform: new TransformOptions { Version = resolved },
-        CarbonRefDirs: carbonRefs,
-        OxideRefDirs: oxideRefs,
-        PartRegions: partRegions));
+    BundleResult result;
+    try
+    {
+        result = Bundler.Bundle(new BundleRequest(
+            plugin,
+            sharedFiles,
+            Transform: new TransformOptions { Version = resolved },
+            CarbonRefDirs: carbonRefs,
+            OxideRefDirs: oxideRefs,
+            PartRegions: partRegions));
+    }
+    catch (BundleException ex)
+    {
+        Console.Error.WriteLine($"[bundler] ERROR: {ex.Message}");
+        return 1;
+    }
 
     // Always emit (even on a failed compile-check) so the bad bundle is on disk to inspect.
     string? outFull = null;

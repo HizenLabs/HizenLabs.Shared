@@ -17,8 +17,9 @@ namespace HizenLabs.Bundler;
 ///     prefix matching a menu name (BuildMain_TaskList), the [MenuLayout] in the same file,
 ///     the plugin's sole [MenuLayout].
 /// Per menu it emits the page enum (default page first, so <c>default</c> is the opening
-/// page), id constants, a MenuViewers field, Show/Close methods, and the close-button command
-/// handler. Once per plugin it emits Menu_OnPlayerDisconnected/Menu_Unload cleanup and the
+/// page), id constants, a MenuViewers field, Show/Close methods, the close-button command
+/// handler, and a navigation command handler ("&lt;menuId&gt;.nav") that page-enum buttons
+/// (AppLayout.AddHeaderButton(label, page)) target. Once per plugin it emits Menu_OnPlayerDisconnected/Menu_Unload cleanup and the
 /// game hooks that call them - when the author already defines a hook, the call is inserted
 /// into their method instead. A <c>Command = nameof(...)</c> on [MenuLayout] produces a
 /// CommandShow&lt;Name&gt; handler; KitWire registers it like a [ConfigCommand].
@@ -370,6 +371,14 @@ public static class MenuWire
             sb.Append("        var player = arg.Player();\n");
             sb.Append("        if (player != null)\n");
             sb.Append($"            {n}Viewers.Remove(player);\n    }}\n\n");
+
+            sb.Append($"    // Navigation glue: buttons created with AddHeaderButton(label, {n}Page.X) run this.\n");
+            sb.Append($"    [MenuCommand(\"{menu.Id}.nav\")]\n");
+            sb.Append($"    private void On{n}Navigate(ConsoleSystem.Arg arg)\n    {{\n");
+            sb.Append("        var player = arg.Player();\n");
+            sb.Append("        var page = arg.GetInt(0, -1);\n");
+            sb.Append($"        if (player != null && page >= 0 && page < {menu.Pages.Count})\n");
+            sb.Append($"            Show{n}(player, ({n}Page)page);\n    }}\n\n");
 
             if (menu.Command is not null)
             {

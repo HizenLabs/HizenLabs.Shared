@@ -79,8 +79,13 @@ public readonly struct AppLayout
         public readonly MenuScope Content;
         public readonly MenuScope Footer;
 
-        internal Page(MenuScope header, MenuScope content, MenuScope footer)
+        private readonly Menu _menu;
+        private readonly string _appMenuId;
+
+        internal Page(Menu menu, string appMenuId, MenuScope header, MenuScope content, MenuScope footer)
         {
+            _menu = menu;
+            _appMenuId = appMenuId;
             Header = header;
             Content = content;
             Footer = footer;
@@ -88,12 +93,13 @@ public readonly struct AppLayout
 
         /// <summary>
         /// The header title owned by THIS page, drawn in the same slot as the layout-level
-        /// <see cref="AppLayout.SetTitle"/>. Use one or the other per menu: a page title on
-        /// top of a layout title overlaps.
+        /// <see cref="AppLayout.SetTitle"/> (use one or the other per menu - they overlap).
+        /// Left-side header buttons added BEFORE the title shift it right past them.
         /// </summary>
         public Page SetTitle(string title)
         {
-            Header.AddText(new MenuPosition(0f, 0f, 0f, 1f), new MenuOffset(TitleLeft, 0f, TitleRight, 0f),
+            var shift = _menu.LeftEdgeUsed;
+            Header.AddText(new MenuPosition(0f, 0f, 0f, 1f), new MenuOffset(TitleLeft + shift, 0f, TitleRight + shift, 0f),
                 title, 22, MenuTheme.TitleText, TextAnchor.MiddleLeft, MenuTheme.TitleFont);
             return this;
         }
@@ -101,17 +107,22 @@ public readonly struct AppLayout
         /// <summary>
         /// A header-bar action button owned by THIS page: swapping pages replaces it with the
         /// next page's set, so each page declares its own buttons. Same slot geometry as the
-        /// layout-level <see cref="AppLayout.AddHeaderButton"/> (slot 0 just left of the close
-        /// button, walking left) - the two share the row, so a menu-level button and a page
-        /// button in the same slot overlap.
+        /// layout-level variant (assuming the close button is present) - the two share the
+        /// row, so a menu-level button and a page button in the same slot overlap. Omit slot
+        /// to take the next one in add order.
         /// </summary>
-        public Page AddHeaderButton(int slot, string label, string command, float width = 90f)
+        public Page AddHeaderButton(string label, string command, MenuSide side = MenuSide.Right, int? slot = null, float width = 90f, Color? background = null, Color? textColor = null)
         {
-            var half = (BarHeight - ControlPadding * 2f) / 2f;
-            var right = -(DefaultActionsRight + slot * (width + SlotGap));
-            Header.AddButton(MenuPosition.MiddleRight, new MenuOffset(right - width, -half, right, half), command, MenuTheme.ButtonBackground)
-                .AddText(MenuPosition.Full, MenuOffset.Zero, label, MenuTheme.ButtonFontSize, MenuTheme.ButtonText, font: MenuTheme.TitleFont);
+            PlaceHeaderButton(_menu, Header.Container, DefaultActionsRight, label, command, side, slot, width, background, textColor);
             return this;
+        }
+
+        /// <summary>A page-owned header button that navigates to another page of this menu via
+        /// the generated wiring's navigation handler - no hand-written handler needed.</summary>
+        public Page AddHeaderButton<TPage>(string label, TPage page, MenuSide side = MenuSide.Right, int? slot = null, float width = 90f, Color? background = null, Color? textColor = null)
+            where TPage : struct, System.Enum
+        {
+            return AddHeaderButton(label, NavCommand(_appMenuId, page), side, slot, width, background, textColor);
         }
     }
 
@@ -138,13 +149,16 @@ public readonly struct AppLayout
             .AddContainer(MenuPosition.Full, MenuOffset.Zero, menu.Id, replace: true);
         var footer = menu.Scope(new MenuContainer(appMenuId + ".footer"))
             .AddContainer(MenuPosition.Full, MenuOffset.Zero, menu.Id + ".footer", replace: true);
-        return new Page(header, content, footer);
+        return new Page(menu, appMenuId, header, content, footer);
     }
 
-    /// <summary>The header's main title (22pt bold, left-aligned in its slot).</summary>
+    /// <summary>The header's main title (22pt bold, left-aligned). Left-side header buttons
+    /// added BEFORE the title shift it right past them.</summary>
     public AppLayout SetTitle(string title)
     {
-        _menu.CreateText(_shell.Title, MenuPosition.Full, MenuOffset.Zero, title, 22, MenuTheme.TitleText, TextAnchor.MiddleLeft, MenuTheme.TitleFont);
+        var shift = _menu.LeftEdgeUsed;
+        _menu.CreateText(_shell.Header, new MenuPosition(0f, 0f, 0f, 1f), new MenuOffset(TitleLeft + shift, 0f, TitleRight + shift, 0f),
+            title, 22, MenuTheme.TitleText, TextAnchor.MiddleLeft, MenuTheme.TitleFont);
         return this;
     }
 
@@ -156,18 +170,54 @@ public readonly struct AppLayout
     }
 
     /// <summary>
-    /// A header-bar action button. Slot 0 sits just left of the close button (or at the bar's
-    /// right inset when the layout has no close button); higher slots walk further left. The
-    /// button is sized to the bar like the close button.
+    /// A header-bar action button that persists across page swaps (a page declares its own via
+    /// <see cref="Page.AddHeaderButton(string, string, MenuSide, int?, float, Color?, Color?)"/>).
+    /// Right-side slot 0 sits just left of the close button and higher slots walk left;
+    /// left-side buttons walk right from the bar's left inset. Omit slot to take the next one
+    /// in add order.
     /// </summary>
-    public AppLayout AddHeaderButton(int slot, string label, string command, float width = 90f)
+    public AppLayout AddHeaderButton(string label, string command, MenuSide side = MenuSide.Right, int? slot = null, float width = 90f, Color? background = null, Color? textColor = null)
+    {
+        PlaceHeaderButton(_menu, _shell.Header, _shell.ActionsRight, label, command, side, slot, width, background, textColor);
+        return this;
+    }
+
+    /// <summary>A header-bar button that navigates to a page of this menu: the command is the
+    /// generated wiring's navigation handler, so no hand-written handler is needed.</summary>
+    public AppLayout AddHeaderButton<TPage>(string label, TPage page, MenuSide side = MenuSide.Right, int? slot = null, float width = 90f, Color? background = null, Color? textColor = null)
+        where TPage : struct, System.Enum
+    {
+        return AddHeaderButton(label, NavCommand(_menu.Id, page), side, slot, width, background, textColor);
+    }
+
+    /// <summary>The generated navigation command for a page of the menu ("id.nav 2"); MenuWire
+    /// emits the matching [MenuCommand("&lt;menuId&gt;.nav")] handler.</summary>
+    private static string NavCommand<TPage>(string appMenuId, TPage page) where TPage : struct, System.Enum =>
+        appMenuId + ".nav " + System.Convert.ToInt32(page);
+
+    /// <summary>Shared slot placement for layout-level and page-level header buttons. Explicit
+    /// slots also advance the auto cursor past themselves, so explicit and add-order buttons
+    /// mix without overlapping.</summary>
+    private static void PlaceHeaderButton(Menu menu, MenuContainer header, float actionsRight, string label, string command, MenuSide side, int? slot, float width, Color? background, Color? textColor)
     {
         var half = (BarHeight - ControlPadding * 2f) / 2f;
-        var right = -(_shell.ActionsRight + slot * (width + SlotGap));
-        var button = _menu.CreateButton(_shell.Header, MenuPosition.MiddleRight,
-            new MenuOffset(right - width, -half, right, half), command, MenuTheme.ButtonBackground, _menu.Id + ".header.btn" + slot);
-        _menu.CreateText(button, MenuPosition.Full, MenuOffset.Zero, label, MenuTheme.ButtonFontSize, MenuTheme.ButtonText, font: MenuTheme.TitleFont);
-        return this;
+        MenuContainer button;
+        if (side == MenuSide.Right)
+        {
+            var index = slot ?? menu.AutoSlotRight;
+            menu.AutoSlotRight = index + 1 > menu.AutoSlotRight ? index + 1 : menu.AutoSlotRight;
+            var right = -(actionsRight + index * (width + SlotGap));
+            button = menu.CreateButton(header, MenuPosition.MiddleRight,
+                new MenuOffset(right - width, -half, right, half), command, background ?? MenuTheme.ButtonBackground);
+        }
+        else
+        {
+            var left = CloseInset + menu.LeftEdgeUsed;
+            menu.LeftEdgeUsed += width + SlotGap;
+            button = menu.CreateButton(header, MenuPosition.MiddleLeft,
+                new MenuOffset(left, -half, left + width, half), command, background ?? MenuTheme.ButtonBackground);
+        }
+        menu.CreateText(button, MenuPosition.Full, MenuOffset.Zero, label, MenuTheme.ButtonFontSize, textColor ?? MenuTheme.ButtonText, font: MenuTheme.TitleFont);
     }
 
     // ---- shell plumbing (one compile per key, immortal cache) ----

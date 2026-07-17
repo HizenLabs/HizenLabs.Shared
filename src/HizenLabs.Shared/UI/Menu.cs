@@ -44,6 +44,11 @@ public class Menu : IDisposable, Pool.IPooled
     private int _autoId;
     private byte[] _shell;
 
+    // Layout scratch: cursors for slot-dispensing helpers (AppLayout header buttons). A Menu
+    // instance builds exactly one shell open or one page, so the cursors scope to that build.
+    internal int AutoSlotRight;
+    internal float LeftEdgeUsed;
+
     #endregion
 
     #region Factory
@@ -73,6 +78,8 @@ public class Menu : IDisposable, Pool.IPooled
         CloseCommand = null;
         _count = 0;
         _autoId = 0;
+        AutoSlotRight = 0;
+        LeftEdgeUsed = 0f;
     }
 
     public void LeavePool()
